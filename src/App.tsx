@@ -9,14 +9,20 @@ import {
   Bell, 
   Info, 
   CheckCircle2, 
-  ArrowLeft, 
-  Factory, 
-  PenTool as Tool, 
-  AlertTriangle, 
+  ArrowLeft,
+  Factory,
+  PenTool as Tool,
+  AlertTriangle,
   Eye,
   RefreshCw,
   LogIn,
-  Lock
+  Lock,
+  ArrowUp,
+  Clock,
+  Target,
+  Activity,
+  TrendingUp,
+  Maximize2
 } from 'lucide-react';
 import { SignOperationModal } from './components/SignOperationModal';
 import { OperationActions } from './components/OperationActions';
@@ -28,6 +34,11 @@ const IMAGES = {
   operation: `${import.meta.env.BASE_URL}operation.png`,
   operation2d: `${import.meta.env.BASE_URL}2d.jpg`,
 };
+
+interface Machine {
+  id: string;
+  name: string;
+}
 
 interface Operation {
   id: number;
@@ -770,19 +781,12 @@ function App() {
                   <Settings className="h-6 w-6" />
                 </button>
 
-                {/* User Info & Logout */}
+                {/* User Info */}
                 <div className="flex items-center ml-6 pl-6 border-l border-white/20">
                   <div className="mr-4 text-right">
                     <p className="text-white text-sm font-medium">{operatorId}</p>
                     <p className="text-white/60 text-xs">Operador</p>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-                    title="Sair"
-                  >
-                    <LogOut className="h-6 w-6" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -791,14 +795,14 @@ function App() {
 
         <div className="flex flex-col md:flex-row">
           {/* Sidebar - Mobile Dropdown */}
-          <div className="md:hidden bg-white p-4">
+          <div className="md:hidden bg-white p-4 border-b border-gray-200">
             <select 
               value={activeTab}
               onChange={(e) => {
                 setActiveTab(e.target.value);
                 setSelectedProgram(null);
               }}
-              className="w-full p-2 rounded-lg border border-gray-300"
+              className="w-full p-2 rounded-lg border border-gray-300 text-sm"
             >
               <option value="dashboard">Dashboard</option>
               <option value="projects">Projetos</option>
@@ -807,165 +811,242 @@ function App() {
           </div>
 
           {/* Sidebar - Desktop */}
-          <aside className="hidden md:block sidebar w-64 min-h-[calc(100vh-6rem)] p-4 space-y-2">
-            <button
-              onClick={() => {
-                setActiveTab('dashboard');
-                setSelectedProgram(null);
-                setSelectedOperation(null);
-              }}
-              className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'bg-primary text-white'
-                  : 'hover:bg-primary hover:text-white text-gray-700'
-              }`}
-            >
-              <LayoutDashboard className="h-5 w-5" />
-              <span>Dashboard</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('projects');
-                setSelectedProgram(null);
-              }}
-              className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'projects'
-                  ? 'bg-primary text-white'
-                  : 'hover:bg-primary hover:text-white text-gray-700'
-              }`}
-            >
-              <ClipboardList className="h-5 w-5" />
-              <span>Projetos</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('history');
-                setSelectedProgram(null);
-              }}
-              className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'history'
-                  ? 'bg-primary text-white'
-                  : 'hover:bg-primary hover:text-white text-gray-700'
-              }`}
-            >
-              <History className="h-5 w-5" />
-              <span>Histórico</span>
-            </button>
+          <aside className="hidden md:block w-64 min-h-[calc(100vh-6rem)] bg-white border-r border-gray-200 shadow-sm">
+            {/* User Profile Section */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">{operatorId}</h3>
+                  <p className="text-xs text-gray-500">Operador</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Menu */}
+            <nav className="p-4 space-y-1">
+              {/* Principal */}
+              <div className="mb-6">
+                <h4 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Principal
+                </h4>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setSelectedProgram(null);
+                      setSelectedOperation(null);
+                    }}
+                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      activeTab === 'dashboard'
+                        ? 'bg-primary text-white'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <LayoutDashboard className="h-5 w-5" />
+                    <span className="text-sm font-medium">Dashboard</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('projects');
+                      setSelectedProgram(null);
+                    }}
+                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      activeTab === 'projects'
+                        ? 'bg-primary text-white'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <ClipboardList className="h-5 w-5" />
+                    <span className="text-sm font-medium">Projetos</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('history');
+                      setSelectedProgram(null);
+                    }}
+                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      activeTab === 'history'
+                        ? 'bg-primary text-white'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <History className="h-5 w-5" />
+                    <span className="text-sm font-medium">Histórico</span>
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    <span className="text-sm font-medium">Sair</span>
+                  </button>
+                </div>
+              </div>
+            </nav>
           </aside>
 
           <main className="flex-1 p-4 md:p-8">
             {activeTab === 'dashboard' && !selectedProgram && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-                  <div className="flex items-center gap-3">
+              <div className="space-y-8">
+                {/* Header com estatísticas principais */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <div className="flex justify-between items-center mb-8">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Visão Geral</h2>
+                      <p className="text-gray-500 mt-1">Acompanhamento em tempo real</p>
+                    </div>
                     <button 
                       onClick={() => handleRefresh('dashboard')} 
-                      className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-white rounded-lg shadow-sm hover:shadow transition-all"
+                      className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
                     >
                       <RefreshCw className={refreshIconClass} />
                       <span>Atualizar</span>
                     </button>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* Card 1 - Projetos Ativos */}
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-emerald-600">Projetos Ativos</p>
+                          <h3 className="text-3xl font-bold text-gray-900 mt-2">{moldPrograms.length}</h3>
+                        </div>
+                        <div className="bg-emerald-100 p-3 rounded-lg">
+                          <ClipboardList className="h-6 w-6 text-emerald-600" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-sm text-emerald-600">
+                        <ArrowUp className="h-4 w-4 mr-1" />
+                        <span>12% mais que o mês anterior</span>
+                      </div>
+                    </div>
+
+                    {/* Card 2 - Em Andamento */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-600">Em Andamento</p>
+                          <h3 className="text-3xl font-bold text-gray-900 mt-2">
+                            {moldPrograms.filter(p => p.operations.some(op => !op.completed)).length}
+                          </h3>
+                        </div>
+                        <div className="bg-blue-100 p-3 rounded-lg">
+                          <Tool className="h-6 w-6 text-blue-600" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-sm text-blue-600">
+                        <Clock className="h-4 w-4 mr-1" />
+                        <span>4 aguardando validação</span>
+                      </div>
+                    </div>
+
+                    {/* Card 3 - Concluídos Hoje */}
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-purple-600">Concluídos Hoje</p>
+                          <h3 className="text-3xl font-bold text-gray-900 mt-2">
+                            {moldPrograms.filter(p => p.operations.every(op => op.completed)).length}
+                          </h3>
+                        </div>
+                        <div className="bg-purple-100 p-3 rounded-lg">
+                          <CheckCircle2 className="h-6 w-6 text-purple-600" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-sm text-purple-600">
+                        <Target className="h-4 w-4 mr-1" />
+                        <span>Meta diária: 8 projetos</span>
+                      </div>
+                    </div>
+
+                    {/* Card 4 - Eficiência */}
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-amber-600">Eficiência</p>
+                          <h3 className="text-3xl font-bold text-gray-900 mt-2">94%</h3>
+                        </div>
+                        <div className="bg-amber-100 p-3 rounded-lg">
+                          <Activity className="h-6 w-6 text-amber-600" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center text-sm text-amber-600">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        <span>5% acima da meta</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-gray-500 text-sm font-medium">Projetos Ativos</span>
-                      <span className="bg-green-100 p-2 rounded-lg">
-                        <ClipboardList className="h-5 w-5 text-green-600" />
-                      </span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="text-3xl font-bold text-[#04514B]">{moldPrograms.length}</span>
-                      <span className="ml-2 text-sm text-gray-500">projetos</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-gray-500 text-sm font-medium">Em Andamento</span>
-                      <span className="bg-blue-100 p-2 rounded-lg">
-                        <Tool className="h-5 w-5 text-blue-600" />
-                      </span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="text-3xl font-bold text-[#04514B]">
-                        {moldPrograms.filter(p => p.operations.some(op => !op.completed)).length}
-                      </span>
-                      <span className="ml-2 text-sm text-gray-500">em execução</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-gray-500 text-sm font-medium">Concluídos Hoje</span>
-                      <span className="bg-purple-100 p-2 rounded-lg">
-                        <CheckCircle2 className="h-5 w-5 text-purple-600" />
-                      </span>
-                    </div>
-                    <div className="flex items-baseline">
-                      <span className="text-3xl font-bold text-[#04514B]">
-                        {moldPrograms.filter(p => p.operations.every(op => op.completed)).length}
-                      </span>
-                      <span className="ml-2 text-sm text-gray-500">finalizados</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recent Projects Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white p-6 rounded-xl shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
+                {/* Projetos Recentes e Power BI */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Projetos Recentes */}
+                  <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-semibold text-gray-900">Projetos Recentes</h3>
-                      <button 
-                        onClick={() => setActiveTab('projects')}
-                        className="text-sm text-[#04514B] hover:text-[#033630] font-medium"
-                      >
+                      <button className="text-sm text-primary hover:text-primary/80 font-medium">
                         Ver todos
                       </button>
                     </div>
+                    
                     <div className="space-y-4">
-                      {moldPrograms.slice(0, 4).map((program) => (
-                        <div
+                      {moldPrograms.slice(0, 5).map((program) => (
+                        <div 
                           key={program.id}
+                          className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
                           onClick={() => {
-                            setActiveTab('projects');
                             setSelectedProgram(program);
+                            setActiveTab('projects');
                           }}
-                          className="flex items-center p-4 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <Factory className="h-5 w-5 text-gray-400" />
-                              <span className="font-medium text-gray-900">{program.name}</span>
+                          <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Factory className="h-6 w-6 text-gray-500" />
+                          </div>
+                          
+                          <div className="ml-4 flex-1">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                program.operations.every(op => op.completed)
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {program.operations.every(op => op.completed) 
+                                  ? 'Concluído'
+                                  : 'Em andamento'}
+                              </span>
                             </div>
-                            <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                              <span>Máquina: {program.machine}</span>
+                            <div className="mt-1 flex items-center text-sm text-gray-500">
+                              <span className="mr-2">Máquina: {program.machine}</span>
                               <span>•</span>
-                              <span>{program.date}</span>
+                              <span className="ml-2">{program.date}</span>
                             </div>
                           </div>
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                            program.operations.every(op => op.completed)
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {program.operations.every(op => op.completed) 
-                              ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
-                              : `${program.operations.filter(op => !op.completed).length} pendentes`}
-                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* Power BI Dashboard */}
-                  <div className="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Análise em Tempo Real</h3>
-                    <div className="powerbi-container rounded-lg overflow-hidden">
+                  <div className="bg-white rounded-2xl shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Análise em Tempo Real</h3>
+                        <p className="text-sm text-gray-500 mt-1">Métricas e indicadores</p>
+                      </div>
+                      <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                        <Maximize2 className="h-5 w-5 text-gray-500" />
+                      </button>
+                    </div>
+                    
+                    <div className="powerbi-container rounded-xl overflow-hidden border border-gray-200">
                       <iframe 
                         title="Dashboard Simoldes"
                         src="https://app.powerbi.com/view?r=eyJrIjoiMzdlYmM0NDctMzdjNi00YmZkLWE0NTQtMjc3MDg3OGYzNmMzIiwidCI6ImU5YzgwMThiLTQwY2YtNDE5MC1hOTA3LTI1ZjNjZjMyNzdiMiJ9"
@@ -973,6 +1054,48 @@ function App() {
                         allowFullScreen
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Seção de Atividades Recentes */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Atividades Recentes</h3>
+                      <p className="text-sm text-gray-500 mt-1">Últimas 24 horas</p>
+                    </div>
+                  </div>
+
+                  <div className="flow-root">
+                    <ul role="list" className="-mb-8">
+                      {[1,2,3,4].map((activity, index) => (
+                        <li key={index}>
+                          <div className="relative pb-8">
+                            {index !== 3 && (
+                              <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                            )}
+                            <div className="relative flex space-x-3">
+                              <div className="relative">
+                                <span className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center ring-8 ring-white">
+                                  <Tool className="h-4 w-4 text-blue-600" />
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                <div>
+                                  <p className="text-sm text-gray-500">
+                                    Operação <span className="font-medium text-gray-900">Fresagem CNC</span> iniciada por{' '}
+                                    <span className="font-medium text-gray-900">João Silva</span>
+                                  </p>
+                                </div>
+                                <div className="whitespace-nowrap text-right text-sm text-gray-500">
+                                  <time dateTime="2023-01-23T13:23">há 3h</time>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -1175,7 +1298,7 @@ function App() {
                             <img
                               src={selectedProgram.imageUrl}
                               alt="Visualização do programa"
-                              className="max-h-64 object-contain"
+                              className="max-h-96 w-full object-contain"
                             />
                           </div>
 
@@ -1671,9 +1794,30 @@ function App() {
                         {/* Imagem central */}
                         <div className="p-4 flex justify-center">
                           <img
+                            src={selectedProgram.imageUrl}
+                            alt="Visualização do programa"
+                            className="max-h-96 w-full object-contain"
+                          />
+                        </div>
+
+                        {/* Última linha */}
+                        <div className="grid grid-cols-2 border-t">
+                          <div className="p-2 border-r text-center">
+                            <div className="text-xs text-gray-500">Status:</div>
+                            <div className="font-bold text-sm text-green-600">1º ABERTO</div>
+                          </div>
+                          <div className="p-2 text-center">
+                            <div className="text-xs text-gray-500">Material:</div>
+                            <div className="font-bold text-sm text-red-600">{selectedProgram.material}</div>
+                          </div>
+                        </div>
+
+                        {/* Imagem central */}
+                        <div className="p-4 flex justify-center">
+                          <img
                             src={IMAGES.operation2d}
                             alt="Visualização do programa"
-                            className="max-h-64 object-contain"
+                            className="max-h-96 w-full object-contain"
                           />
                         </div>
 
