@@ -30,9 +30,9 @@ import { OperationActions } from './components/OperationActions';
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
   loginCapa: `${import.meta.env.BASE_URL}Capa Simoldes.png`,
-  programCapa: `${import.meta.env.BASE_URL}2d.jpg`,
+  programCapa: `${import.meta.env.BASE_URL}2d.png`,
   operation: `${import.meta.env.BASE_URL}operation.png`,
-  operation2d: `${import.meta.env.BASE_URL}2d.jpg`,
+  operation2d: `${import.meta.env.BASE_URL}2d.png`,
 };
 
 interface Machine {
@@ -640,6 +640,81 @@ function App() {
   const refreshIconClass = `h-4 w-4 transition-transform duration-1000 ${
     isRefreshing ? 'animate-spin' : ''
   }`;
+
+  const handleTimeChange = (operationId: number, type: 'start' | 'end', value: string) => {
+    if (!selectedProgram) return;
+    
+    setSelectedProgram({
+      ...selectedProgram,
+      operations: selectedProgram.operations.map((op): Operation =>
+        op.id === operationId
+          ? {
+              ...op,
+              timeRecord: {
+                start: type === 'start' ? value : (op.timeRecord?.start || ''),
+                end: type === 'end' ? value : (op.timeRecord?.end || ''),
+              },
+            }
+          : op
+      ),
+    });
+  };
+
+  const handleMeasurementChange = (operationId: number, value: string) => {
+    if (!selectedProgram) return;
+    
+    setSelectedProgram({
+      ...selectedProgram,
+      operations: selectedProgram.operations.map((op) =>
+        op.id === operationId
+          ? {
+              ...op,
+              measurementValue: value,
+            }
+          : op
+      ),
+    });
+  };
+
+  const handleNotesChange = (operationId: number, value: string) => {
+    if (!selectedProgram) return;
+    
+    setSelectedProgram({
+      ...selectedProgram,
+      operations: selectedProgram.operations.map((op) =>
+        op.id === operationId
+          ? {
+              ...op,
+              inspectionNotes: value,
+            }
+          : op
+      ),
+    });
+  };
+
+  const handleOperationComplete = (operationId: number) => {
+    if (!selectedProgram) return;
+    
+    const operation = selectedProgram.operations.find(op => op.id === operationId);
+    if (!operation?.timeRecord?.start || !operation?.timeRecord?.end || !operation?.measurementValue) {
+      // Adicione aqui a lógica para mostrar um erro ao usuário
+      return;
+    }
+
+    setSelectedProgram({
+      ...selectedProgram,
+      operations: selectedProgram.operations.map((op) =>
+        op.id === operationId
+          ? {
+              ...op,
+              completed: true,
+              signedBy: operatorId,
+              timestamp: new Date().toLocaleString(),
+            }
+          : op
+      ),
+    });
+  };
 
   if (!isAuthenticated) {
     return (
@@ -1332,81 +1407,162 @@ function App() {
                               const isCurrentOperation = !selectedProgram.operations
                                 .slice(0, index)
                                 .some(op => !op.completed);
-                              
-                              if (isCurrentOperation && !operation.completed) {
-                                return (
-                                  <div key={operation.id} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                    <div className="flex justify-between items-start mb-4">
-                                      <div>
-                                        <h4 className="text-lg font-medium text-gray-900">
-                                          Operação {operation.sequence} - {operation.type}
-                                        </h4>
-                                        <p className="text-sm text-gray-600 mt-1">{operation.function}</p>
-                                      </div>
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                        Atual
-                                      </span>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div className="space-y-4">
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-700">Parâmetros</h5>
-                                          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                                            <dt className="text-gray-500">Ferramenta:</dt>
-                                            <dd className="text-gray-900">{operation.toolRef}</dd>
-                                            <dt className="text-gray-500">Velocidade:</dt>
-                                            <dd className="text-gray-900">{operation.details?.speed}</dd>
-                                            <dt className="text-gray-500">Avanço:</dt>
-                                            <dd className="text-gray-900">{operation.details?.feed}</dd>
-                                            <dt className="text-gray-500">Profundidade:</dt>
-                                            <dd className="text-gray-900">{operation.details?.depth}</dd>
-                                          </dl>
-                                        </div>
-                                        
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-700">Qualidade</h5>
-                                          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                                            <dt className="text-gray-500">Tolerância:</dt>
-                                            <dd className="text-gray-900">{operation.quality?.tolerance}</dd>
-                                            <dt className="text-gray-500">Acabamento:</dt>
-                                            <dd className="text-gray-900">{operation.quality?.surfaceFinish}</dd>
-                                          </dl>
-                                        </div>
 
-                                        <div className="flex justify-end space-x-2">
-                                          <button
-                                            onClick={() => setSelectedOperation(operation)}
-                                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                          >
-                                            <Eye className="h-4 w-4 mr-1" />
-                                            Visualizar
-                                          </button>
-                                          <button
-                                            onClick={() => handleOperationCheck(operation.id)}
-                                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200"
-                                          >
-                                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                                            Assinar
-                                          </button>
+                              return isCurrentOperation && !operation.completed ? (
+                                <div key={operation.id} className="bg-green-50 p-4 rounded-lg shadow mb-4">
+                                  {/* Cabeçalho da operação atual */}
+                                  <div className="mb-4 pb-3 border-b border-green-200">
+                                    <h4 className="text-lg font-medium text-gray-900">
+                                      Operação Atual: {operation.sequence} - {operation.type} - {operation.function}
+                                    </h4>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Coluna da esquerda - Parâmetros e Qualidade */}
+                                    <div className="space-y-4">
+                                      {/* Parâmetros */}
+                                      <div>
+                                        <h5 className="text-sm font-medium text-gray-700 mb-2">Parâmetros</h5>
+                                        <dl className="divide-y divide-gray-200">
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Ferramenta:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.toolRef}</dd>
+                                          </div>
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Velocidade:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.details?.speed}</dd>
+                                          </div>
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Avanço:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.details?.feed}</dd>
+                                          </div>
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Profundidade:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.details?.depth}</dd>
+                                          </div>
+                                        </dl>
+                                      </div>
+
+                                      {/* Qualidade */}
+                                      <div>
+                                        <h5 className="text-sm font-medium text-gray-700 mb-2">Qualidade</h5>
+                                        <dl className="divide-y divide-gray-200">
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Tolerância:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.quality?.tolerance}</dd>
+                                          </div>
+                                          <div className="grid grid-cols-[100px,1fr] py-1">
+                                            <dt className="text-gray-500 text-sm">Acabamento:</dt>
+                                            <dd className="text-gray-900 text-sm">{operation.quality?.surfaceFinish}</dd>
+                                          </div>
+                                        </dl>
+                                      </div>
+
+                                      {/* Campos de Preenchimento */}
+                                      <div className="space-y-3 bg-green-100 p-3 rounded-lg">
+                                        <h5 className="text-sm font-medium text-gray-700">Registro de Execução</h5>
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <label className="block text-xs text-gray-500 mb-1">
+                                              Hora Início
+                                            </label>
+                                            <input
+                                              type="time"
+                                              className="w-full h-8 text-sm rounded border-gray-300"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="block text-xs text-gray-500 mb-1">
+                                              Hora Fim
+                                            </label>
+                                            <input
+                                              type="time"
+                                              className="w-full h-8 text-sm rounded border-gray-300"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs text-gray-500 mb-1">
+                                            Medição
+                                          </label>
+                                          <input
+                                            type="number"
+                                            step="0.001"
+                                            className="w-full h-8 text-sm rounded border-gray-300"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs text-gray-500 mb-1">
+                                            Observações
+                                          </label>
+                                          <textarea
+                                            className="w-full h-20 text-sm rounded border-gray-300 resize-none"
+                                          />
                                         </div>
                                       </div>
-                                      
-                                      {/* Apenas Imagem */}
-                                      <div className="w-64 h-64 mx-auto"> {/* Removido bg-white e padding */}
-                                        <img
-                                          src={IMAGES.operation2d}
-                                          alt="Visualização da operação"
-                                          className="w-full h-full object-contain rounded-md border border-gray-200"
-                                        />
+
+                                      {/* Botão de Assinar */}
+                                      <div className="flex justify-start">
+                                        <button
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            const startTime = (document.querySelector('input[type="time"]:first-of-type') as HTMLInputElement)?.value;
+                                            const endTime = (document.querySelector('input[type="time"]:last-of-type') as HTMLInputElement)?.value;
+                                            const measurement = (document.querySelector('input[type="number"]') as HTMLInputElement)?.value;
+                                            const notes = (document.querySelector('textarea') as HTMLTextAreaElement)?.value;
+
+                                            if (!startTime || !endTime || !measurement) {
+                                              alert('Por favor, preencha todos os campos obrigatórios');
+                                              return;
+                                            }
+
+                                            if (!selectedProgram || !operation.id) return;
+
+                                            setSelectedProgram({
+                                              ...selectedProgram,
+                                              operations: selectedProgram.operations.map((op) =>
+                                                op.id === operation.id
+                                                  ? {
+                                                      ...op,
+                                                      completed: true,
+                                                      signedBy: operatorId,
+                                                      timestamp: new Date().toLocaleString(),
+                                                      inspectionNotes: notes,
+                                                      timeRecord: {
+                                                        start: startTime,
+                                                        end: endTime,
+                                                      },
+                                                      measurementValue: measurement,
+                                                    }
+                                                  : op
+                                              ),
+                                            });
+                                          }}
+                                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                        >
+                                          <CheckCircle2 className="h-5 w-5 mr-2" />
+                                          Confirmar Assinatura
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {/* Coluna da direita - Visualizações */}
+                                    <div className="space-y-4">
+                                      {/* Visualização da Operação */}
+                                      <div className="p-3 rounded-lg">
+                                        <h3 className="text-sm font-medium text-gray-900 mb-2">
+                                          Visualização da Operação
+                                        </h3>
+                                        <div className="aspect-w-16 aspect-h-9">
+                                          <img
+                                            src={IMAGES.operation2d}
+                                            alt="Visualização da operação"
+                                            className="w-full h-full object-contain rounded"
+                                          />
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                );
-                              }
-                              
-                              // Outras operações em formato de tabela
-                              return null;
+                                </div>
+                              ) : null;
                             })}
 
                             {/* Tabela com outras operações */}
@@ -1428,10 +1584,14 @@ function App() {
                                       .slice(0, index)
                                       .some(op => !op.completed);
                                     
-                                    if (isCurrentOperation && !operation.completed) return null;
+                                    // Removida a condição: if (isCurrentOperation && !operation.completed) return null;
 
                                     return (
-                                      <tr key={operation.id}>
+                                      <tr key={operation.id} className={`${
+                                        isCurrentOperation && !operation.completed 
+                                          ? 'bg-green-50' 
+                                          : ''
+                                      }`}>
                                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.sequence}</td>
                                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.type}</td>
                                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.function}</td>
@@ -1440,9 +1600,15 @@ function App() {
                                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                             operation.completed 
                                               ? 'bg-green-100 text-green-800' 
-                                              : 'bg-yellow-100 text-yellow-800'
+                                              : isCurrentOperation
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : 'bg-yellow-100 text-yellow-800'
                                           }`}>
-                                            {operation.completed ? 'Concluído' : 'Pendente'}
+                                            {operation.completed 
+                                              ? 'Concluído' 
+                                              : isCurrentOperation
+                                                ? 'Atual'
+                                                : 'Pendente'}
                                           </span>
                                         </td>
                                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
@@ -1528,8 +1694,8 @@ function App() {
                           )}
 
                           {/* Parâmetros de Usinagem */}
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <h3 className="text-sm font-medium text-gray-900 mb-4">
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">
                               Parâmetros de Usinagem
                             </h3>
                             <dl className="grid grid-cols-2 gap-2 text-sm">
@@ -1553,11 +1719,11 @@ function App() {
                           </div>
 
                           {/* Requisitos de Qualidade */}
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <h3 className="text-sm font-medium text-gray-900 mb-4">
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <h3 className="text-sm font-medium text-gray-900 mb-2">
                               Requisitos de Qualidade
                             </h3>
-                            <dl className="grid grid-cols-2 gap-2 text-sm mb-4">
+                            <dl className="grid grid-cols-2 gap-2 text-sm mb-2">
                               <dt className="text-gray-500">Tolerância:</dt>
                               <dd className="text-gray-900">
                                 {selectedOperation.quality.tolerance}
@@ -1568,10 +1734,10 @@ function App() {
                               </dd>
                             </dl>
                             <div>
-                              <h4 className="text-sm font-medium text-gray-900 mb-2">
+                              <h4 className="text-sm font-medium text-gray-900 mb-1">
                                 Checklist de Inspeção:
                               </h4>
-                              <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                              <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
                                 {selectedOperation.quality.requirements.map((req, idx) => (
                                   <li key={idx}>{req}</li>
                                 ))}
@@ -1579,24 +1745,64 @@ function App() {
                             </div>
                           </div>
 
-                          {/* Observações (se houver) */}
-                          {selectedOperation.details.notes && (
-                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
-                              <div className="flex">
-                                <div className="flex-shrink-0">
-                                  <Info className="h-5 w-5 text-yellow-400" />
+                          {/* Campos de Preenchimento e Visualização */}
+                          <div className="grid grid-cols-[3fr,2fr] gap-4 mt-4">
+                            {/* Campos de Preenchimento */}
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">
+                                    Hora Início
+                                  </label>
+                                  <input
+                                    type="time"
+                                    className="w-full h-8 text-sm rounded border-gray-300"
+                                  />
                                 </div>
-                                <div className="ml-3">
-                                  <h3 className="text-sm font-medium text-yellow-800">
-                                    Observações
-                                  </h3>
-                                  <p className="text-sm text-yellow-700 mt-1">
-                                    {selectedOperation.details.notes}
-                                  </p>
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">
+                                    Hora Fim
+                                  </label>
+                                  <input
+                                    type="time"
+                                    className="w-full h-8 text-sm rounded border-gray-300"
+                                  />
                                 </div>
                               </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  Medição
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  className="w-full h-8 text-sm rounded border-gray-300"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  Observações
+                                </label>
+                                <textarea
+                                  className="w-full h-16 text-sm rounded border-gray-300 resize-none"
+                                />
+                              </div>
                             </div>
-                          )}
+
+                            {/* Visualização 2D */}
+                            <div className="bg-gray-50 p-2 rounded-lg">
+                              <h3 className="text-sm font-medium text-gray-900 mb-2">
+                                Visualização 2D
+                              </h3>
+                              <div className="aspect-w-16 aspect-h-9">
+                                <img
+                                  src={IMAGES.operation2d}
+                                  alt="Visualização da operação"
+                                  className="w-full h-full object-contain rounded"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Visualização da Operação */}
