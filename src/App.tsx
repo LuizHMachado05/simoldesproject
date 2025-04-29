@@ -1769,28 +1769,6 @@ function App() {
                           </div>
                         </div>
 
-                        {/* Segunda linha */}
-                        <div className="border-b p-2 text-center">
-                          <div className="text-xs text-gray-500">Pasta dos Programas:</div>
-                          <div className="font-bold text-sm text-red-600">{selectedProgram.programPath}</div>
-                        </div>
-
-                        {/* Terceira linha */}
-                        <div className="grid grid-cols-3 border-b">
-                          <div className="p-2 border-r text-center">
-                            <div className="text-xs text-gray-500">Programador:</div>
-                            <div className="font-medium text-sm">{selectedProgram.programmer}</div>
-                          </div>
-                          <div className="p-2 border-r text-center">
-                            <div className="text-xs text-gray-500">Status:</div>
-                            <div className="font-bold text-sm text-green-600">1º ABERTO</div>
-                          </div>
-                          <div className="p-2 text-center">
-                            <div className="text-xs text-gray-500">Material:</div>
-                            <div className="font-bold text-sm text-red-600">{selectedProgram.material}</div>
-                          </div>
-                        </div>
-
                         {/* Imagem central */}
                         <div className="p-4 flex justify-center">
                           <img
@@ -1812,16 +1790,7 @@ function App() {
                           </div>
                         </div>
 
-                        {/* Imagem central */}
-                        <div className="p-4 flex justify-center">
-                          <img
-                            src={IMAGES.operation2d}
-                            alt="Visualização do programa"
-                            className="max-h-96 w-full object-contain"
-                          />
-                        </div>
-
-                        {/* Última linha */}
+                        {/* Última linha com informações do bloco */}
                         <div className="grid grid-cols-2 border-t">
                           <div className="p-2 border-r text-center">
                             <div className="text-xs text-gray-500">Centro do Bloco:</div>
