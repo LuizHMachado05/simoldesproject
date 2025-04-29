@@ -1412,15 +1412,16 @@ function App() {
                                 <div key={operation.id} className="bg-green-50 p-4 rounded-lg shadow mb-4">
                                   {/* Cabeçalho da operação atual */}
                                   <div className="mb-4 pb-3 border-b border-green-200">
-                                    <h4 className="text-lg font-medium text-gray-900">
+                                    <h4 className="text-lg font-medium text-gray-900 break-words">
                                       Operação Atual: {operation.sequence} - {operation.type} - {operation.function}
                                     </h4>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Coluna da esquerda - Parâmetros e Qualidade */}
+                                  {/* Grid responsivo */}
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                                    {/* Coluna da esquerda */}
                                     <div className="space-y-4">
                                       {/* Parâmetros */}
-                                      <div>
+                                      <div className="overflow-x-auto">
                                         <h5 className="text-sm font-medium text-gray-700 mb-2">Parâmetros</h5>
                                         <dl className="divide-y divide-gray-200">
                                           <div className="grid grid-cols-[100px,1fr] py-1">
