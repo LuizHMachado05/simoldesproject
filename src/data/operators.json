@@ -1,0 +1,62 @@
+[
+  {
+    "matricula": "123456",
+    "nome": "Luiz Henrique",
+    "cargo": "Operador CNC",
+    "turno": "Manhã"
+  },
+  {
+    "matricula": "234567",
+    "nome": "Maria Silva",
+    "cargo": "Operadora CNC",
+    "turno": "Tarde"
+  },
+  {
+    "matricula": "345678",
+    "nome": "João Santos",
+    "cargo": "Operador CNC",
+    "turno": "Noite"
+  },
+  {
+    "matricula": "456789",
+    "nome": "Ana Oliveira",
+    "cargo": "Operadora CNC",
+    "turno": "Manhã"
+  },
+  {
+    "matricula": "567890",
+    "nome": "Carlos Pereira",
+    "cargo": "Operador CNC",
+    "turno": "Tarde"
+  },
+  {
+    "matricula": "678901",
+    "nome": "Juliana Costa",
+    "cargo": "Operadora CNC",
+    "turno": "Noite"
+  },
+  {
+    "matricula": "789012",
+    "nome": "Roberto Almeida",
+    "cargo": "Operador CNC",
+    "turno": "Manhã"
+  },
+  {
+    "matricula": "890123",
+    "nome": "Fernanda Lima",
+    "cargo": "Operadora CNC",
+    "turno": "Tarde"
+  },
+  {
+    "matricula": "901234",
+    "nome": "Marcelo Souza",
+    "cargo": "Operador CNC",
+    "turno": "Noite"
+  },
+  {
+    "matricula": "012345",
+    "nome": "Luciana Martins",
+    "cargo": "Operadora CNC",
+    "turno": "Manhã"
+  }
+]
