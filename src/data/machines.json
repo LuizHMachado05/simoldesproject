@@ -1,0 +1,14 @@
+[
+  {
+    "codigo_maquina": "F1400",
+    "nome_maquina": "Fresadora CNC 1400",
+    "senha": " ",
+    "status": "ativo"
+  },
+  {
+    "codigo_maquina": "T2500",
+    "nome_maquina": "Torno CNC 2500",
+    "senha": "654321",
+    "status": "ativo"
+  }
+]
