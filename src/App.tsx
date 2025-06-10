@@ -26,12 +26,16 @@ import {
   Maximize2,
   Shield,
   Save,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X,
+  Check
 } from 'lucide-react';
 import { OperatorSearchModal } from './components/OperatorSearchModal';
 import { OperationActions } from './components/OperationActions';
 import { authenticateMachine } from './services/authService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
+import { Dashboard } from './components/Dashboard';
+import { SignPasswordModal } from './components/SignPasswordModal';
 
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
@@ -71,7 +75,7 @@ interface Operation {
     surfaceFinish: string;
     requirements: string[];
   };
-  imageUrl: string;
+  imageUrl?: string; // Tornando imageUrl opcional
   completed: boolean;
   signedBy?: string;
   timestamp?: string;
@@ -353,10 +357,10 @@ const historicPrograms: MoldProgram[] = [
 ];
 
 function App() {
-  const [machineId, setMachineId] = useState(''); // Alterado de operatorId para machineId
+  const [machineId, setMachineId] = useState('');
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('projects'); // Alterado de 'dashboard' para 'projects'
   const [selectedProgram, setSelectedProgram] = useState<MoldProgram | null>(null);
   const [selectedOperation, setSelectedOperation] = useState<Operation | null>(null);
   const [signModal, setSignModal] = useState({
@@ -366,6 +370,24 @@ function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedOperations, setExpandedOperations] = useState<number[]>([]);
   const [programs, setPrograms] = useState<MoldProgram[]>(historicPrograms); // Using historicPrograms instead of moldPrograms
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSignPasswordModal, setShowSignPasswordModal] = useState(false);
+  const [pendingSignatureData, setPendingSignatureData] = useState<{
+    startTime: string;
+    endTime: string;
+    measurement: string;
+    operatorName: string;
+    notes?: string;
+    operationId: number; // Adicionando operationId aos dados pendentes
+  } | null>(null);
+  
+  // Mock de logs para notificações (você pode mover isso para um arquivo separado depois)
+  const notificationLogs = [
+    { id: 1, type: 'warning', message: 'Manutenção programada para F1400 em 2h', time: '10 min atrás' },
+    { id: 2, type: 'error', message: 'Falha na conexão com T2500', time: '30 min atrás' },
+    { id: 3, type: 'success', message: 'Operação #123 concluída com sucesso', time: '1h atrás' },
+    { id: 4, type: 'info', message: 'Novo projeto adicionado: MOLDE LATERAL', time: '2h atrás' },
+  ];
 
   const toggleOperationExpand = (operationId: number) => {
     setExpandedOperations(prev => 
@@ -600,9 +622,9 @@ function App() {
         const machine = await authenticateMachine(machineId, password);
         
         if (machine) {
-          // Login bem-sucedido - define o estado como autenticado
+          // Login bem-sucedido - define o estado como autenticado e direciona para projetos
           setIsAuthenticated(true);
-          // Não precisamos restaurar o botão aqui, pois a tela de login será substituída pela tela principal
+          setActiveTab('projects'); // Garantindo que vá para a aba de projetos após login
         } else {
           // Login falhou - restaura o botão e mostra mensagem
           alert('Código de máquina ou senha inválidos');
@@ -633,22 +655,8 @@ function App() {
 
   const handleOperationCheck = (operationId: number) => {
     if (!selectedProgram) return;
-
-    // Remova esta parte que verifica operações anteriores
-    /*
-    const operationIndex = selectedProgram.operations.findIndex(
-      (op) => op.id === operationId
-    );
-    const previousOperations = selectedProgram.operations.slice(0, operationIndex);
-    const allPreviousCompleted = previousOperations.every((op) => op.completed);
-
-    if (!allPreviousCompleted) {
-      alert('Por favor, complete as operações anteriores primeiro.');
-      return;
-    }
-    */
-
-    // Simplesmente abra o modal de assinatura
+    
+    // Agora abre diretamente o modal de seleção de operador
     setSignModal({
       isOpen: true,
       operationId,
@@ -659,32 +667,43 @@ function App() {
     startTime: string;
     endTime: string;
     measurement: string;
-    operatorName: string; 
+    operatorName: string;
     notes?: string;
   }) => {
-    if (!selectedProgram || !signModal.operationId) return;
-
-    setSelectedProgram({
-      ...selectedProgram,
-      operations: selectedProgram.operations.map((op) =>
-        op.id === signModal.operationId
-          ? {
-              ...op,
-              completed: true,
-              signedBy: data.operatorName, // Usa o nome do operador fornecido
-              timestamp: new Date().toLocaleString(),
-              inspectionNotes: data.notes,
-              timeRecord: {
-                start: data.startTime,
-                end: data.endTime,
-              },
-              measurementValue: data.measurement,
-            }
-          : op
-      ),
+    // Incluindo o operationId nos dados pendentes
+    setPendingSignatureData({
+      ...data,
+      operationId: signModal.operationId || 0,
     });
-
     setSignModal({ isOpen: false, operationId: null });
+    setShowSignPasswordModal(true);
+  };
+
+  const handlePasswordConfirm = () => {
+    // Após a senha ser confirmada, processamos a assinatura
+    if (pendingSignatureData && selectedProgram) {
+      setSelectedProgram({
+        ...selectedProgram,
+        operations: selectedProgram.operations.map((op) =>
+          op.id === pendingSignatureData.operationId
+            ? {
+                ...op,
+                completed: true,
+                signedBy: pendingSignatureData.operatorName,
+                timestamp: new Date().toLocaleString(),
+                inspectionNotes: pendingSignatureData.notes,
+                timeRecord: {
+                  start: pendingSignatureData.startTime,
+                  end: pendingSignatureData.endTime,
+                },
+                measurementValue: pendingSignatureData.measurement,
+              }
+            : op
+        ),
+      });
+    }
+    setShowSignPasswordModal(false);
+    setPendingSignatureData(null);
   };
 
   const handleRefresh = (tab: string) => {
@@ -872,6 +891,22 @@ function App() {
     alert(`Logs exportados com sucesso para o arquivo "${fileName}"`);
   };
 
+  const handleImportProject = (importedProjects: MoldProgram | MoldProgram[]) => {
+    if (Array.isArray(importedProjects)) {
+      setPrograms(prev => [...prev, ...importedProjects]);
+      // Mostrar o primeiro projeto importado
+      if (importedProjects.length > 0) {
+        setSelectedProgram(importedProjects[0]);
+        setActiveTab('projects');
+      }
+    } else {
+      setPrograms(prev => [...prev, importedProjects]);
+      // Mostrar o projeto importado
+      setSelectedProgram(importedProjects);
+      setActiveTab('projects');
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="login-background">
@@ -979,7 +1014,7 @@ function App() {
               {/* Left - Logo */}
               <button
                 onClick={() => {
-                  setActiveTab('dashboard');
+                  setActiveTab('projects');
                   setSelectedProgram(null);
                   setSelectedOperation(null);
                 }}
@@ -1002,10 +1037,56 @@ function App() {
               {/* Right - Actions */}
               <div className="flex items-center">
                 {/* Notifications */}
-                <button className="relative p-2 text-white hover:bg-white/10 rounded-full transition-colors mx-2">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)} 
+                  className="relative p-2 text-white hover:bg-white/10 rounded-full transition-colors mx-2"
+                >
                   <Bell className="h-6 w-6" />
                   <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
                 </button>
+
+                {/* Pop-up de Notificações */}
+                {showNotifications && (
+                  <div className="absolute top-16 right-4 w-96 bg-white rounded-lg shadow-lg z-50">
+                    <div className="p-4 border-b border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-medium text-gray-900">Notificações</h3>
+                        <button 
+                          onClick={() => setShowNotifications(false)}
+                          className="text-gray-400 hover:text-gray-500"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notificationLogs.map((log) => (
+                        <div key={log.id} className="p-4 border-b border-gray-100 hover:bg-gray-50">
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0">
+                              {log.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500" />}
+                              {log.type === 'error' && <X className="h-5 w-5 text-red-500" />}
+                              {log.type === 'success' && <Check className="h-5 w-5 text-green-500" />}
+                              {log.type === 'info' && <Info className="h-5 w-5 text-blue-500" />}
+                            </div>
+                            <div className="ml-3 flex-1">
+                              <p className="text-sm text-gray-900">{log.message}</p>
+                              <p className="mt-1 text-xs text-gray-500">{log.time}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-b-lg">
+                      <button 
+                        onClick={() => setActiveTab('logs')}
+                        className="w-full text-center text-sm text-primary hover:text-primary-dark"
+                      >
+                        Ver todos os logs
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Settings */}
                 <button className="p-2 text-white hover:bg-white/10 rounded-full transition-colors mx-2">
@@ -1142,212 +1223,214 @@ function App() {
 
           <main className="flex-1 p-4 md:p-8">
             {activeTab === 'dashboard' && !selectedProgram && (
-              <div className="space-y-8">
-                {/* Header com estatísticas principais */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-8">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Visão Geral</h2>
-                      <p className="text-gray-500 mt-1">Acompanhamento em tempo real</p>
-                    </div>
-                    <button 
-                      onClick={() => handleRefresh('dashboard')} 
-                      className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
-                    >
-                      <RefreshCw className={refreshIconClass} />
-                      <span>Atualizar</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Card 1 - Projetos Ativos */}
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-emerald-600">Projetos Ativos</p>
-                          <h3 className="text-3xl font-bold text-gray-900 mt-2">{moldPrograms.length}</h3>
-                        </div>
-                        <div className="bg-emerald-100 p-3 rounded-lg">
-                          <ClipboardList className="h-6 w-6 text-emerald-600" />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center text-sm text-emerald-600">
-                        <ArrowUp className="h-4 w-4 mr-1" />
-                        <span>12% mais que o mês anterior</span>
-                      </div>
-                    </div>
-
-                    {/* Card 2 - Em Andamento */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-blue-600">Em Andamento</p>
-                          <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                            {moldPrograms.filter(p => p.operations.some(op => !op.completed)).length}
-                          </h3>
-                        </div>
-                        <div className="bg-blue-100 p-3 rounded-lg">
-                          <Tool className="h-6 w-6 text-blue-600" />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center text-sm text-blue-600">
-                        <Clock className="h-4 w-4 mr-1" />
-                        <span>4 aguardando validação</span>
-                      </div>
-                    </div>
-
-                    {/* Card 3 - Concluídos Hoje */}
-                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-purple-600">Concluídos Hoje</p>
-                          <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                            {moldPrograms.filter(p => p.operations.every(op => op.completed)).length}
-                          </h3>
-                        </div>
-                        <div className="bg-purple-100 p-3 rounded-lg">
-                          <CheckCircle2 className="h-6 w-6 text-purple-600" />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center text-sm text-purple-600">
-                        <Target className="h-4 w-4 mr-1" />
-                        <span>Meta diária: 8 projetos</span>
-                      </div>
-                    </div>
-
-                    {/* Card 4 - Eficiência */}
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-amber-600">Eficiência</p>
-                          <h3 className="text-3xl font-bold text-gray-900 mt-2">94%</h3>
-                        </div>
-                        <div className="bg-amber-100 p-3 rounded-lg">
-                          <Activity className="h-6 w-6 text-amber-600" />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center text-sm text-amber-600">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        <span>5% acima da meta</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Projetos Recentes e Power BI */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Projetos Recentes */}
+              <Dashboard>
+                <div className="space-y-8">
+                  {/* Header com estatísticas principais */}
                   <div className="bg-white rounded-2xl shadow-sm p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900">Projetos Recentes</h3>
-                      <button className="text-sm text-primary hover:text-primary/80 font-medium">
-                        Ver todos
+                    <div className="flex justify-between items-center mb-8">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Visão Geral</h2>
+                        <p className="text-gray-500 mt-1">Acompanhamento em tempo real</p>
+                      </div>
+                      <button 
+                        onClick={() => handleRefresh('dashboard')} 
+                        className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
+                      >
+                        <RefreshCw className={refreshIconClass} />
+                        <span>Atualizar</span>
                       </button>
                     </div>
-                    
-                    <div className="space-y-4">
-                      {moldPrograms.slice(0, 5).map((program) => (
-                        <div 
-                          key={program.id}
-                          className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
-                          onClick={() => {
-                            setSelectedProgram(program);
-                            setActiveTab('projects');
-                          }}
-                        >
-                          <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <Factory className="h-6 w-6 text-gray-500" />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {/* Card 1 - Projetos Ativos */}
+                      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-emerald-600">Projetos Ativos</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{moldPrograms.length}</h3>
                           </div>
-                          
-                          <div className="ml-4 flex-1">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                program.operations.every(op => op.completed)
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {program.operations.every(op => op.completed) 
-                                  ? 'Concluído'
-                                  : 'Em andamento'}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span className="mr-2">Máquina: {program.machine}</span>
-                              <span>•</span>
-                              <span className="ml-2">{program.date}</span>
-                            </div>
+                          <div className="bg-emerald-100 p-3 rounded-lg">
+                            <ClipboardList className="h-6 w-6 text-emerald-600" />
                           </div>
                         </div>
-                      ))}
+                        <div className="mt-4 flex items-center text-sm text-emerald-600">
+                          <ArrowUp className="h-4 w-4 mr-1" />
+                          <span>12% mais que o mês anterior</span>
+                        </div>
+                      </div>
+
+                      {/* Card 2 - Em Andamento */}
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-600">Em Andamento</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">
+                              {moldPrograms.filter(p => p.operations.some(op => !op.completed)).length}
+                            </h3>
+                          </div>
+                          <div className="bg-blue-100 p-3 rounded-lg">
+                            <Tool className="h-6 w-6 text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center text-sm text-blue-600">
+                          <Clock className="h-4 w-4 mr-1" />
+                          <span>4 aguardando validação</span>
+                        </div>
+                      </div>
+
+                      {/* Card 3 - Concluídos Hoje */}
+                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-purple-600">Concluídos Hoje</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">
+                              {moldPrograms.filter(p => p.operations.every(op => op.completed)).length}
+                            </h3>
+                          </div>
+                          <div className="bg-purple-100 p-3 rounded-lg">
+                            <CheckCircle2 className="h-6 w-6 text-purple-600" />
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center text-sm text-purple-600">
+                          <Target className="h-4 w-4 mr-1" />
+                          <span>Meta diária: 8 projetos</span>
+                        </div>
+                      </div>
+
+                      {/* Card 4 - Eficiência */}
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-amber-600">Eficiência</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">94%</h3>
+                          </div>
+                          <div className="bg-amber-100 p-3 rounded-lg">
+                            <Activity className="h-6 w-6 text-amber-600" />
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center text-sm text-amber-600">
+                          <TrendingUp className="h-4 w-4 mr-1" />
+                          <span>5% acima da meta</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Power BI Dashboard */}
+                  {/* Projetos Recentes e Power BI */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Projetos Recentes */}
+                    <div className="bg-white rounded-2xl shadow-sm p-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-semibold text-gray-900">Projetos Recentes</h3>
+                        <button className="text-sm text-primary hover:text-primary/80 font-medium">
+                          Ver todos
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {moldPrograms.slice(0, 5).map((program) => (
+                          <div 
+                            key={program.id}
+                            className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
+                            onClick={() => {
+                              setSelectedProgram(program);
+                              setActiveTab('projects');
+                            }}
+                          >
+                            <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Factory className="h-6 w-6 text-gray-500" />
+                            </div>
+                            
+                            <div className="ml-4 flex-1">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  program.operations.every(op => op.completed)
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {program.operations.every(op => op.completed) 
+                                    ? 'Concluído'
+                                    : 'Em andamento'}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center text-sm text-gray-500">
+                                <span className="mr-2">Máquina: {program.machine}</span>
+                                <span>•</span>
+                                <span className="ml-2">{program.date}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Power BI Dashboard */}
+                    <div className="bg-white rounded-2xl shadow-sm p-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Análise em Tempo Real</h3>
+                          <p className="text-sm text-gray-500 mt-1">Métricas e indicadores</p>
+                        </div>
+                        <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                          <Maximize2 className="h-5 w-5 text-gray-500" />
+                        </button>
+                      </div>
+                      
+                      <div className="powerbi-container rounded-xl overflow-hidden border border-gray-200">
+                        <iframe 
+                          title="Dashboard Simoldes"
+                          src="https://app.powerbi.com/view?r=eyJrIjoiMzdlYmM0NDctMzdjNi00YmZkLWE0NTQtMjc3MDg3OGYzNmMzIiwidCI6ImU5YzgwMThiLTQwY2YtNDE5MC1hOTA3LTI1ZjNjZjMyNzdiMiJ9"
+                          className="w-full h-full border-0"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seção de Atividades Recentes */}
                   <div className="bg-white rounded-2xl shadow-sm p-6">
                     <div className="flex justify-between items-center mb-6">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Análise em Tempo Real</h3>
-                        <p className="text-sm text-gray-500 mt-1">Métricas e indicadores</p>
+                        <h3 className="text-lg font-semibold text-gray-900">Atividades Recentes</h3>
+                        <p className="text-sm text-gray-500 mt-1">Últimas 24 horas</p>
                       </div>
-                      <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                        <Maximize2 className="h-5 w-5 text-gray-500" />
-                      </button>
                     </div>
-                    
-                    <div className="powerbi-container rounded-xl overflow-hidden border border-gray-200">
-                      <iframe 
-                        title="Dashboard Simoldes"
-                        src="https://app.powerbi.com/view?r=eyJrIjoiMzdlYmM0NDctMzdjNi00YmZkLWE0NTQtMjc3MDg3OGYzNmMzIiwidCI6ImU5YzgwMThiLTQwY2YtNDE5MC1hOTA3LTI1ZjNjZjMyNzdiMiJ9"
-                        className="w-full h-full border-0"
-                        allowFullScreen
-                      />
-                    </div>
-                  </div>
-                </div>
 
-                {/* Seção de Atividades Recentes */}
-                <div className="bg-white rounded-2xl shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Atividades Recentes</h3>
-                      <p className="text-sm text-gray-500 mt-1">Últimas 24 horas</p>
-                    </div>
-                  </div>
-
-                  <div className="flow-root">
-                    <ul role="list" className="-mb-8">
-                      {[1,2,3,4].map((activity, index) => (
-                        <li key={index}>
-                          <div className="relative pb-8">
-                            {index !== 3 && (
-                              <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
-                            )}
-                            <div className="relative flex space-x-3">
-                              <div className="relative">
-                                <span className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center ring-8 ring-white">
-                                  <Tool className="h-4 w-4 text-blue-600" />
-                                </span>
-                              </div>
-                              <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
-                                <div>
-                                  <p className="text-sm text-gray-500">
-                                    Operação <span className="font-medium text-gray-900">Fresagem CNC</span> iniciada por{' '}
-                                    <span className="font-medium text-gray-900">João Silva</span>
-                                  </p>
+                    <div className="flow-root">
+                      <ul role="list" className="-mb-8">
+                        {[1,2,3,4].map((activity, index) => (
+                          <li key={index}>
+                            <div className="relative pb-8">
+                              {index !== 3 && (
+                                <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                              )}
+                              <div className="relative flex space-x-3">
+                                <div className="relative">
+                                  <span className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center ring-8 ring-white">
+                                    <Tool className="h-4 w-4 text-blue-600" />
+                                  </span>
                                 </div>
-                                <div className="whitespace-nowrap text-right text-sm text-gray-500">
-                                  <time dateTime="2023-01-23T13:23">há 3h</time>
+                                <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                  <div>
+                                    <p className="text-sm text-gray-500">
+                                      Operação <span className="font-medium text-gray-900">Fresagem CNC</span> iniciada por{' '}
+                                      <span className="font-medium text-gray-900">João Silva</span>
+                                    </p>
+                                  </div>
+                                  <div className="whitespace-nowrap text-right text-sm text-gray-500">
+                                    <time dateTime="2023-01-23T13:23">há 3h</time>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Dashboard>
             )}
 
             {activeTab === 'projects' && (
@@ -1545,7 +1628,7 @@ function App() {
                           {/* Imagem central */}
                           <div className="p-4 flex justify-center">
                             <img
-                              src={selectedProgram.imageUrl}
+                              src={selectedProgram.imageUrl || IMAGES.programCapa}
                               alt="Visualização do programa"
                               className="max-h-96 w-full object-contain"
                             />
@@ -1873,7 +1956,7 @@ function App() {
                           </h3>
                           <div className="aspect-w-16 aspect-h-9">
                             <img
-                              src={selectedProgram.imageUrl || IMAGES.programCapa}
+                              src={selectedOperation.imageUrl || IMAGES.operation}
                               alt="Visualização da operação"
                               className="w-full h-full object-contain rounded-lg"
                             />
@@ -2037,7 +2120,7 @@ function App() {
                         {/* Imagem central */}
                         <div className="p-4 flex justify-center">
                           <img
-                            src={selectedProgram.imageUrl}
+                            src={selectedProgram.imageUrl || IMAGES.programCapa}
                             alt="Visualização do programa"
                             className="max-h-96 w-full object-contain"
                           />
@@ -2207,7 +2290,7 @@ function App() {
                           </h3>
                           <div className="aspect-w-16 aspect-h-9">
                             <img
-                              src={selectedProgram.imageUrl || IMAGES.programCapa}
+                              src={selectedOperation.imageUrl || IMAGES.operation}
                               alt="Visualização da operação"
                               className="w-full h-full object-contain rounded-lg"
                             />
@@ -2222,7 +2305,7 @@ function App() {
             
             {/* Adicionando a renderização do painel de administração */}
             {activeTab === 'admin' && (
-              <AdminPanel />
+              <AdminPanel onImportProject={handleImportProject} />
             )}
           </main>
         </div>
@@ -2232,6 +2315,15 @@ function App() {
         onClose={() => setSignModal({ isOpen: false, operationId: null })}
         onConfirm={handleSignConfirm}
       />
+      {showSignPasswordModal && (
+        <SignPasswordModal
+          onClose={() => {
+            setShowSignPasswordModal(false);
+            setPendingSignatureData(null);
+          }}
+          onConfirm={handlePasswordConfirm}
+        />
+      )}
     </>
   );
 }

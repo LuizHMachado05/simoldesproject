@@ -17,11 +17,17 @@ import {
   X,
   Check,
   ClipboardList,
-  Calendar
+  Calendar,
+  Upload,
+  User,
+  Key,
+  Lock
 } from 'lucide-react';
 import { getOperators, Operator } from '../services/operatorService';
 import machinesData from '../data/machines.json';
 import { ProgramEditModal } from './ProgramEditModal';
+import { validateAndFormatImportedProject } from '../utils/projectImport';
+import type { MoldProgram as ImportedMoldProgram } from '../types/project';
 
 // Interface para máquina
 interface Machine {
@@ -103,7 +109,11 @@ const filterPrograms = (programs: MoldProgram[], searchTerm: string): MoldProgra
   );
 };
 
-export function AdminPanel(): ReactElement {
+interface AdminPanelProps {
+  onImportProject?: (projects: ImportedMoldProgram | ImportedMoldProgram[]) => void;
+}
+
+export function AdminPanel({ onImportProject }: AdminPanelProps): ReactElement {
   const [activeTab, setActiveTab] = useState('users');
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,6 +163,9 @@ export function AdminPanel(): ReactElement {
   });
 
   const [showDetailedEditModal, setShowDetailedEditModal] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(true);
 
   // Logs de exemplo (mantidos como mock pois não temos um JSON para isso)
   const mockLogs = [
@@ -589,6 +602,39 @@ export function AdminPanel(): ReactElement {
     setShowDetailedEditModal(null);
   };
 
+  const handleImportJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileContent = await file.text();
+      const jsonData = JSON.parse(fileContent);
+      const formattedProjects = validateAndFormatImportedProject(jsonData);
+      
+      // Atualizar a lista local de projetos
+      if (Array.isArray(formattedProjects)) {
+        setPrograms(prev => [...prev, ...formattedProjects]);
+        setFilteredPrograms(prev => [...prev, ...formattedProjects]);
+      } else {
+        setPrograms(prev => [...prev, formattedProjects]);
+        setFilteredPrograms(prev => [...prev, formattedProjects]);
+      }
+
+      // Chamar a função de callback se existir
+      if (onImportProject) {
+        onImportProject(formattedProjects);
+      }
+
+      alert('Projeto(s) importado(s) com sucesso!');
+    } catch (error) {
+      console.error('Erro ao importar arquivo:', error);
+      alert('Erro ao importar arquivo. Verifique se o formato está correto.');
+    }
+
+    // Limpa o input para permitir selecionar o mesmo arquivo novamente
+    event.target.value = '';
+  };
+
   const renderProgramsTab = () => {
     return (
       <div className="space-y-4">
@@ -621,6 +667,47 @@ export function AdminPanel(): ReactElement {
       </div>
     );
   };
+
+  const handleAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Por enquanto, aceita qualquer senha
+    setIsAuthenticated(true);
+    setShowAuthModal(false);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="flex items-center justify-center mb-6">
+            <Lock className="h-12 w-12 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold text-center mb-6">Área Restrita</h2>
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Senha de Administrador
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="Digite a senha"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary-dark transition-colors"
+            >
+              Entrar
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -734,6 +821,18 @@ export function AdminPanel(): ReactElement {
                     <Plus className="h-5 w-5" />
                     <span>Adicionar Projeto</span>
                   </button>
+                )}
+                {activeTab === 'programs' && (
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors cursor-pointer">
+                    <Upload className="h-5 w-5" />
+                    <span>Import from JSON</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportJson}
+                      className="hidden"
+                    />
+                  </label>
                 )}
                 <button 
                   onClick={handleRefresh}
@@ -867,12 +966,20 @@ export function AdminPanel(): ReactElement {
                                 <button 
                                   onClick={() => startEditingOperator(operator.matricula)}
                                   className="text-blue-600 hover:text-blue-900"
+                                  title="Editar"
                                 >
                                   <Edit className="h-5 w-5" />
+                                </button>
+                                <button
+                                  className="text-yellow-600 hover:text-yellow-900"
+                                  title="Reset de Senha"
+                                >
+                                  <Key className="h-5 w-5" />
                                 </button>
                                 <button 
                                   onClick={() => deleteOperator(operator.matricula)}
                                   className="text-red-600 hover:text-red-900"
+                                  title="Excluir"
                                 >
                                   <Trash2 className="h-5 w-5" />
                                 </button>
