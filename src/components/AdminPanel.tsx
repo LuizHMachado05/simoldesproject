@@ -320,8 +320,10 @@ export function AdminPanel(): ReactElement {
           break;
         
         case 'logs':
-          // Recarregar logs (quando implementado)
-          // Por enquanto usa dados mock
+          // Recarregar logs da API
+          const logsData = await getLogs(logFilters);
+          setLogs(logsData);
+          setFilteredLogs(logsData);
           break;
       }
 
@@ -342,6 +344,55 @@ export function AdminPanel(): ReactElement {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Funções para gerenciar logs
+  const refreshLogs = async () => {
+    try {
+      const logsData = await getLogs(logFilters);
+      setLogs(logsData);
+      setFilteredLogs(logsData);
+    } catch (error) {
+      console.error('Erro ao recarregar logs:', error);
+    }
+  };
+
+  const deleteLogHandler = async (logId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este log?')) {
+      try {
+        await deleteLog(logId);
+        await refreshLogs();
+      } catch (error) {
+        alert('Erro ao remover log');
+      }
+    }
+  };
+
+  const clearOldLogsHandler = async () => {
+    const days = prompt('Digite o número de dias para manter os logs (padrão: 30):', '30');
+    if (days) {
+      try {
+        const result = await clearOldLogs(parseInt(days));
+        alert(`${result.deletedCount} logs antigos foram removidos`);
+        await refreshLogs();
+      } catch (error) {
+        alert('Erro ao limpar logs antigos');
+      }
+    }
+  };
+
+  const applyLogFilters = async () => {
+    try {
+      const filteredLogsData = await getLogs(logFilters);
+      setFilteredLogs(filteredLogsData);
+    } catch (error) {
+      console.error('Erro ao aplicar filtros:', error);
+    }
+  };
+
+  const resetLogFilters = () => {
+    setLogFilters({});
+    setFilteredLogs(logs);
   };
 
   const refreshOperators = async () => {
@@ -949,322 +1000,198 @@ export function AdminPanel(): ReactElement {
               renderProgramsTab()
             )}
 
-            {/* Modal para adicionar programa */}
-            {showAddModal === 'program' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Projeto</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ID do Projeto *
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.projectId}
-                        onChange={(e) => setNewProgram({ ...newProgram, projectId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: 1670_20"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome do Projeto *
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.name}
-                        onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: MOLDE LATERAL ESQUERDO"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Máquina *
-                      </label>
-                      <select
-                        value={newProgram.machine}
-                        onChange={(e) => setNewProgram({ ...newProgram, machine: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="">Selecione uma máquina</option>
-                        {machines.map((machine) => (
-                          <option key={machine.machineId} value={machine.machineId}>
-                            {machine.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Material
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.material}
-                        onChange={(e) => setNewProgram({ ...newProgram, material: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: 1730"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Programador
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.programmer}
-                        onChange={(e) => setNewProgram({ ...newProgram, programmer: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: nome.sobrenome"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Observações
-                      </label>
-                      <textarea
-                        value={newProgram.observations}
-                        onChange={(e) => setNewProgram({ ...newProgram, observations: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        rows={3}
-                        placeholder="Observações importantes sobre o projeto"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddProgram}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal para adicionar operador */}
-            {showAddModal === 'operator' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Operador</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome Completo *
-                      </label>
-                      <input
-                        type="text"
-                        value={newOperator.name}
-                        onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: João Silva"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Código *
-                      </label>
-                      <input
-                        type="text"
-                        value={newOperator.code}
-                        onChange={(e) => setNewOperator({ ...newOperator, code: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: OP12345"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cargo *
-                      </label>
-                      <select
-                        value={newOperator.role}
-                        onChange={(e) => setNewOperator({ ...newOperator, role: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="">Selecione um cargo</option>
-                        <option value="operator">Operador</option>
-                        <option value="supervisor">Supervisor</option>
-                        <option value="admin">Administrador</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Ativo
-                      </label>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={newOperator.active}
-                          onChange={(e) => setNewOperator({ ...newOperator, active: e.target.checked })}
-                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">
-                          {newOperator.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddOperator}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal para adicionar máquina */}
-            {showAddModal === 'machine' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Nova Máquina</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Código da Máquina *
-                      </label>
-                      <input
-                        type="text"
-                        value={newMachine.machineId}
-                        onChange={(e) => setNewMachine({ ...newMachine, machineId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: F1400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome da Máquina *
-                      </label>
-                      <input
-                        type="text"
-                        value={newMachine.name}
-                        onChange={(e) => setNewMachine({ ...newMachine, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: Fresadora CNC 1400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status
-                      </label>
-                      <select
-                        value={newMachine.status}
-                        onChange={(e) => setNewMachine({ ...newMachine, status: e.target.value as 'active' | 'maintenance' | 'inactive' })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="active">Ativo</option>
-                        <option value="inactive">Inativo</option>
-                        <option value="maintenance">Em Manutenção</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Senha *
-                      </label>
-                      <input
-                        type="password"
-                        value={newMachine.password}
-                        onChange={(e) => setNewMachine({ ...newMachine, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Senha da máquina"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddMachine}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Aba de Logs */}
             {activeTab === 'logs' && (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ID
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tipo
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Usuário
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Máquina
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Data/Hora
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Detalhes
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{log.id}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            log.type === 'Erro' 
-                              ? 'bg-red-100 text-red-800' 
-                              : log.type === 'Manutenção'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-green-100 text-green-800'
-                          }`}>
-                            {log.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{log.user}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{log.machine}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{log.timestamp}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{log.details}</div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                {/* Filtros de Logs */}
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900">Filtros de Logs</h3>
+                    <button
+                      onClick={() => setShowLogFilters(!showLogFilters)}
+                      className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      <Filter className="h-4 w-4" />
+                      {showLogFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                    </button>
+                  </div>
+                  
+                  {showLogFilters && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                        <select
+                          value={logFilters.type || ''}
+                          onChange={(e) => setLogFilters({ ...logFilters, type: e.target.value || undefined })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        >
+                          <option value="">Todos os tipos</option>
+                          <option value="Login">Login</option>
+                          <option value="Operação">Operação</option>
+                          <option value="Erro">Erro</option>
+                          <option value="Manutenção">Manutenção</option>
+                          <option value="Sistema">Sistema</option>
+                          <option value="Segurança">Segurança</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
+                        <input
+                          type="text"
+                          value={logFilters.user || ''}
+                          onChange={(e) => setLogFilters({ ...logFilters, user: e.target.value || undefined })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                          placeholder="Filtrar por usuário"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Máquina</label>
+                        <input
+                          type="text"
+                          value={logFilters.machine || ''}
+                          onChange={(e) => setLogFilters({ ...logFilters, machine: e.target.value || undefined })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                          placeholder="Filtrar por máquina"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+                        <input
+                          type="date"
+                          value={logFilters.startDate || ''}
+                          onChange={(e) => setLogFilters({ ...logFilters, startDate: e.target.value || undefined })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={applyLogFilters}
+                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+                    >
+                      Aplicar Filtros
+                    </button>
+                    <button
+                      onClick={resetLogFilters}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      Limpar Filtros
+                    </button>
+                    <button
+                      onClick={clearOldLogsHandler}
+                      className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200"
+                    >
+                      Limpar Logs Antigos
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Função para exportar logs (implementar depois)
+                        alert('Funcionalidade de exportação será implementada em breve');
+                      }}
+                      className="px-4 py-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"
+                    >
+                      <Download className="h-4 w-4 inline mr-2" />
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tabela de Logs */}
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tipo
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Usuário
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Máquina
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Data/Hora
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Detalhes
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ações
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredLogs.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                              Nenhum log encontrado
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredLogs.map((log) => (
+                            <tr key={log._id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  log.type === 'Erro' 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : log.type === 'Manutenção'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : log.type === 'Login'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : log.type === 'Operação'
+                                          ? 'bg-green-100 text-green-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {log.type}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{log.user}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{log.machine}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {new Date(log.timestamp).toLocaleString('pt-BR')}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-900 max-w-xs truncate" title={log.details}>
+                                  {log.details}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => deleteLogHandler(log._id)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Deletar log"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {filteredLogs.length > 0 && (
+                    <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                      <div className="text-sm text-gray-700">
+                        Mostrando {filteredLogs.length} de {logs.length} logs
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1456,6 +1383,263 @@ export function AdminPanel(): ReactElement {
                 onClose={() => setShowDetailedEditModal(null)}
                 onSave={handleSaveDetailedEdit}
               />
+            )}
+
+            {/* Modal para adicionar operador */}
+            {showAddModal === 'operator' && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Operador</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nome Completo *
+                      </label>
+                      <input
+                        type="text"
+                        value={newOperator.name}
+                        onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: João Silva"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Código *
+                      </label>
+                      <input
+                        type="text"
+                        value={newOperator.code}
+                        onChange={(e) => setNewOperator({ ...newOperator, code: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: OP12345"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cargo *
+                      </label>
+                      <select
+                        value={newOperator.role}
+                        onChange={(e) => setNewOperator({ ...newOperator, role: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                      >
+                        <option value="">Selecione um cargo</option>
+                        <option value="operator">Operador</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Ativo
+                      </label>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newOperator.active}
+                          onChange={(e) => setNewOperator({ ...newOperator, active: e.target.checked })}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          {newOperator.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowAddModal(null)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAddOperator}
+                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para adicionar máquina */}
+            {showAddModal === 'machine' && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Nova Máquina</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Código da Máquina *
+                      </label>
+                      <input
+                        type="text"
+                        value={newMachine.machineId}
+                        onChange={(e) => setNewMachine({ ...newMachine, machineId: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: F1400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nome da Máquina *
+                      </label>
+                      <input
+                        type="text"
+                        value={newMachine.name}
+                        onChange={(e) => setNewMachine({ ...newMachine, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: Fresadora CNC 1400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Status
+                      </label>
+                      <select
+                        value={newMachine.status}
+                        onChange={(e) => setNewMachine({ ...newMachine, status: e.target.value as 'active' | 'maintenance' | 'inactive' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                      >
+                        <option value="active">Ativo</option>
+                        <option value="inactive">Inativo</option>
+                        <option value="maintenance">Em Manutenção</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Senha *
+                      </label>
+                      <input
+                        type="password"
+                        value={newMachine.password}
+                        onChange={(e) => setNewMachine({ ...newMachine, password: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Senha da máquina"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowAddModal(null)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAddMachine}
+                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal para adicionar programa */}
+            {showAddModal === 'program' && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Projeto</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        ID do Projeto *
+                      </label>
+                      <input
+                        type="text"
+                        value={newProgram.projectId}
+                        onChange={(e) => setNewProgram({ ...newProgram, projectId: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: 1670_20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nome do Projeto *
+                      </label>
+                      <input
+                        type="text"
+                        value={newProgram.name}
+                        onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: MOLDE LATERAL ESQUERDO"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Máquina *
+                      </label>
+                      <select
+                        value={newProgram.machine}
+                        onChange={(e) => setNewProgram({ ...newProgram, machine: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                      >
+                        <option value="">Selecione uma máquina</option>
+                        {machines.map((machine) => (
+                          <option key={machine.machineId} value={machine.machineId}>
+                            {machine.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Material
+                      </label>
+                      <input
+                        type="text"
+                        value={newProgram.material}
+                        onChange={(e) => setNewProgram({ ...newProgram, material: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: 1730"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Programador
+                      </label>
+                      <input
+                        type="text"
+                        value={newProgram.programmer}
+                        onChange={(e) => setNewProgram({ ...newProgram, programmer: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        placeholder="Ex: nome.sobrenome"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Observações
+                      </label>
+                      <textarea
+                        value={newProgram.observations}
+                        onChange={(e) => setNewProgram({ ...newProgram, observations: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                        rows={3}
+                        placeholder="Observações importantes sobre o projeto"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowAddModal(null)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleAddProgram}
+                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>

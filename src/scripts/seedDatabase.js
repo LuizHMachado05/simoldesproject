@@ -1,9 +1,9 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGODB_URI || "mongodb+srv://luiz:luiz2610@simoldes.uuhrbxx.mongodb.net/?retryWrites=true&w=majority&appName=simoldes";
 
 // Dados iniciais
 const initialData = {
@@ -13,24 +13,24 @@ const initialData = {
       code: "JS001",
       role: "operator",
       active: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     },
     {
       name: "Maria Santos",
       code: "MS002",
       role: "operator",
       active: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     },
     {
       name: "Pedro Oliveira",
       code: "PO003",
       role: "operator",
       active: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   ],
   machines: [
@@ -39,18 +39,18 @@ const initialData = {
       name: "Fresadora 1400",
       password: "f1400pass",
       status: "active",
-      lastLogin: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      lastLogin: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
     },
     {
       machineId: "T2500",
       name: "Torno 2500",
       password: "t2500pass",
       status: "active",
-      lastLogin: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      lastLogin: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   ],
   projects: [
@@ -60,20 +60,19 @@ const initialData = {
       machine: "F1400",
       programPath: "U:/F1400/1668_18",
       material: "1730",
-      date: new Date().toISOString(),
+      date: new Date(),
       programmer: "diego.verciano",
       blockCenter: "X0,0 Y0,0",
       reference: "EM Z: 20,0",
       observations: "PRENDER SOBRE CALÇOS DE 10mm",
       imageUrl: "/programCapa.png",
       status: "in_progress",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   ],
   operations: [
     {
-      projectId: "1668_18",
       sequence: "07",
       type: "Furação",
       function: "Centro",
@@ -103,16 +102,20 @@ const initialData = {
       },
       imageUrl: "/operation.png",
       completed: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   ],
   operationLogs: [
     {
+      operationId: null,
+      projectId: null,
+      machineId: "F1400",
+      operatorId: null,
       type: "complete",
       value: "54.99",
-      timestamp: new Date().toISOString(),
-      createdAt: new Date().toISOString()
+      timestamp: new Date(),
+      createdAt: new Date()
     }
   ],
   moldPrograms: [
@@ -122,7 +125,7 @@ const initialData = {
       machine: "F1400",
       programPath: "U:/F1400/1665_15",
       material: "1730",
-      date: "05/02/2024",
+      date: new Date("2024-02-05"),
       programmer: "diego.verciano",
       blockCenter: "X0,0 Y0,0",
       reference: "EM Z: 15,0",
@@ -183,11 +186,63 @@ async function seedDatabase() {
 
     // Inserir dados iniciais
     console.log('\nInserindo dados iniciais...');
-    for (const [collection, data] of Object.entries(initialData)) {
-      if (data.length > 0) {
-        await db.collection(collection).insertMany(data);
-        console.log(`✅ ${data.length} documentos inseridos em ${collection}`);
+    
+    // Inserir operators
+    if (initialData.operators.length > 0) {
+      await db.collection('operators').insertMany(initialData.operators);
+      console.log(`✅ ${initialData.operators.length} documentos inseridos em operators`);
+    }
+
+    // Inserir machines
+    if (initialData.machines.length > 0) {
+      await db.collection('machines').insertMany(initialData.machines);
+      console.log(`✅ ${initialData.machines.length} documentos inseridos em machines`);
+    }
+
+    // Inserir projects primeiro
+    if (initialData.projects.length > 0) {
+      const projectResult = await db.collection('projects').insertMany(initialData.projects);
+      console.log(`✅ ${initialData.projects.length} documentos inseridos em projects`);
+      
+      // Pegar o _id do projeto inserido para usar nas operations
+      const projectId = projectResult.insertedIds[0];
+      
+      // Inserir operations com o projectId correto
+      if (initialData.operations.length > 0) {
+        const operationsWithProjectId = initialData.operations.map(op => ({
+          ...op,
+          projectId: projectId
+        }));
+        
+        const operationResult = await db.collection('operations').insertMany(operationsWithProjectId);
+        console.log(`✅ ${initialData.operations.length} documentos inseridos em operations`);
+        
+        // Pegar o _id da operation inserida para usar nos logs
+        const operationId = operationResult.insertedIds[0];
+        
+        // Pegar o _id do primeiro operator para usar nos logs
+        const operator = await db.collection('operators').findOne({});
+        const operatorId = operator ? operator._id : null;
+        
+        // Inserir operationLogs com os IDs corretos
+        if (initialData.operationLogs.length > 0) {
+          const logsWithIds = initialData.operationLogs.map(log => ({
+            ...log,
+            operationId: operationId,
+            projectId: projectId,
+            operatorId: operatorId
+          }));
+          
+          await db.collection('operationLogs').insertMany(logsWithIds);
+          console.log(`✅ ${initialData.operationLogs.length} documentos inseridos em operationLogs`);
+        }
       }
+    }
+
+    // Inserir moldPrograms
+    if (initialData.moldPrograms.length > 0) {
+      await db.collection('moldPrograms').insertMany(initialData.moldPrograms);
+      console.log(`✅ ${initialData.moldPrograms.length} documentos inseridos em moldPrograms`);
     }
 
     // Verificar dados inseridos

@@ -6,6 +6,7 @@ const machinesRouter = require('./routes/machines');
 const operationsRouter = require('./routes/operations');
 const projectsRouter = require('./routes/projects');
 const logsRouter = require('./routes/logs');
+const authRouter = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -18,6 +19,7 @@ app.use('/api/machines', machinesRouter);
 app.use('/api/operations', operationsRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/logs', logsRouter);
+app.use('/api/auth', authRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });

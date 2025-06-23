@@ -11,6 +11,7 @@
     "setup-db": "ts-node src/scripts/setupDatabase.ts",
     "test:db": "node src/utils/testConnection.js",
     "seed:db": "node src/scripts/seedDatabase.js",
+    "seed:logs": "node src/scripts/seedLogs.js",
     "check:db": "node src/utils/checkDatabaseData.js"
   },
   "dependencies": {
