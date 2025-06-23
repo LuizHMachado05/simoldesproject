@@ -158,86 +158,6 @@ export function AdminPanel(): ReactElement {
 
   const [showDetailedEditModal, setShowDetailedEditModal] = useState<string | null>(null);
 
-  // Programas de exemplo (mantidos temporariamente)
-  const mockPrograms: MoldProgram[] = [
-    {
-      _id: '1',
-      projectId: '1668_18',
-      name: 'MOLDE CARCAÇA FRONTAL',
-      machine: 'F1400',
-      programPath: 'U:/F1400/1668_18',
-      material: '1730',
-      date: new Date('2025-02-10'),
-      programmer: 'diego.verciano',
-      blockCenter: 'X0,0 Y0,0',
-      reference: 'EM Z: 20,0',
-      observations: 'PRENDER SOBRE CALÇOS DE 10mm',
-      imageUrl: '/images/program-cover.jpg',
-      status: 'in_progress',
-      operations: [
-        {
-          id: 1,
-          sequence: '07',
-          type: 'Furação',
-          function: 'Centro',
-          centerPoint: '48',
-          toolRef: 'BK_TOPDRIL_D44_SSD_701800011',
-          ic: '247',
-          alt: '273',
-          time: {
-            machine: '10:30:12',
-            total: '10:38:15',
-          },
-          details: {
-            depth: '120mm',
-            speed: '2400 RPM',
-            feed: '0.15mm/rev',
-            coolant: 'Externa 40 bar',
-            notes: 'Verificar alinhamento antes de iniciar',
-          },
-        }
-      ]
-    },
-    {
-      _id: '2',
-      projectId: '1665_15',
-      name: 'MOLDE LATERAL DIREITO',
-      machine: 'F1400',
-      programPath: 'U:/F1400/1665_15',
-      material: '1730',
-      date: new Date('2024-02-05'),
-      programmer: 'diego.verciano',
-      blockCenter: 'X0,0 Y0,0',
-      reference: 'EM Z: 15,0',
-      observations: 'VERIFICAR ALINHAMENTO INICIAL',
-      imageUrl: '/images/program-cover.jpg',
-      status: 'completed',
-      operations: [
-        {
-          id: 1,
-          sequence: '04',
-          type: 'Furação',
-          function: 'Pré-furo',
-          centerPoint: '42',
-          toolRef: 'BK_DRILL_D38_SSD_701800022',
-          ic: '235',
-          alt: '260',
-          time: {
-            machine: '08:15:30',
-            total: '08:22:45',
-          },
-          details: {
-            depth: '80mm',
-            speed: '1800 RPM',
-            feed: '0.12mm/rev',
-            coolant: 'Externa 35 bar',
-            notes: 'Verificar profundidade final',
-          },
-        }
-      ]
-    }
-  ];
-
   // Carregar dados
   useEffect(() => {
     loadData();
@@ -256,14 +176,15 @@ export function AdminPanel(): ReactElement {
       setMachines(machinesData);
       setFilteredMachines(machinesData);
       
+      // Carregar projetos da API
+      const projectsData = await getProjects();
+      setPrograms(projectsData);
+      setFilteredPrograms(projectsData);
+      
       // Carregar logs da API
       const logsData = await getLogs();
       setLogs(logsData);
       setFilteredLogs(logsData);
-      
-      // Programas ainda são mockados
-      setPrograms(mockPrograms);
-      setFilteredPrograms(mockPrograms);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -314,9 +235,10 @@ export function AdminPanel(): ReactElement {
           break;
         
         case 'programs':
-          // Recarregar programas
-          setPrograms(mockPrograms);
-          setFilteredPrograms(mockPrograms);
+          // Recarregar projetos da API
+          const projectsData = await getProjects();
+          setPrograms(projectsData);
+          setFilteredPrograms(projectsData);
           break;
         
         case 'logs':
@@ -555,19 +477,19 @@ export function AdminPanel(): ReactElement {
       setEditingProgram(null);
       setEditedProgramData({});
     } catch (error) {
-      alert('Erro ao salvar programa');
+      alert('Erro ao salvar projeto');
     }
   };
 
   const deleteProgramHandler = async (projectId: string) => {
     const program = programs.find(p => p.projectId === projectId);
     if (!program) return;
-    if (window.confirm('Tem certeza que deseja excluir este programa?')) {
+    if (window.confirm('Tem certeza que deseja excluir este projeto?')) {
       try {
         await deleteProject(program._id);
         await refreshPrograms();
       } catch (error) {
-        alert('Erro ao remover programa');
+        alert('Erro ao remover projeto');
       }
     }
   };
@@ -639,14 +561,14 @@ export function AdminPanel(): ReactElement {
     setShowDetailedEditModal(program._id);
   };
 
-  const handleSaveDetailedEdit = (updatedProgram: MoldProgram) => {
-    // Aqui você implementaria a lógica para salvar as alterações no banco de dados
-    const updatedPrograms = programs.map(p => 
-      p._id === updatedProgram._id ? updatedProgram : p
-    );
-    setPrograms(updatedPrograms);
-    setFilteredPrograms(updatedPrograms);
-    setShowDetailedEditModal(null);
+  const handleSaveDetailedEdit = async (updatedProgram: MoldProgram) => {
+    try {
+      await updateProject(updatedProgram._id, updatedProgram);
+      await refreshPrograms();
+      setShowDetailedEditModal(null);
+    } catch (error) {
+      alert('Erro ao salvar projeto');
+    }
   };
 
   const renderProgramsTab = () => {
@@ -654,22 +576,61 @@ export function AdminPanel(): ReactElement {
       <div className="space-y-4">
         <div className="grid gap-4">
           {filteredPrograms.map((program) => (
-            <div key={program._id} className="bg-white p-4 rounded-lg shadow">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-medium">{program.name}</h3>
-                  <p className="text-gray-600">Máquina: {program.machine}</p>
+            <div key={program._id} className="bg-white p-6 rounded-lg shadow border border-gray-200">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900">{program.name}</h3>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      program.status === 'completed' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {program.status === 'completed' ? 'Concluído' : 'Em Andamento'}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
+                    <div>
+                      <span className="font-medium">ID do Projeto:</span> {program.projectId}
+                    </div>
+                    <div>
+                      <span className="font-medium">Máquina:</span> {program.machine}
+                    </div>
+                    <div>
+                      <span className="font-medium">Material:</span> {program.material || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Programador:</span> {program.programmer || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Data:</span> {new Date(program.date).toLocaleDateString('pt-BR')}
+                    </div>
+                    <div>
+                      <span className="font-medium">Caminho:</span> {program.programPath || 'N/A'}
+                    </div>
+                  </div>
+                  
+                  {program.observations && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                      <span className="font-medium text-gray-700">Observações:</span>
+                      <p className="text-gray-600 mt-1">{program.observations}</p>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                
+                <div className="flex gap-2 ml-4">
                   <button
                     onClick={() => handleDetailedEdit(program)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Editar projeto"
                   >
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => deleteProgramHandler(program.projectId)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Excluir projeto"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -677,6 +638,16 @@ export function AdminPanel(): ReactElement {
               </div>
             </div>
           ))}
+          
+          {filteredPrograms.length === 0 && (
+            <div className="text-center py-12">
+              <Database className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum projeto encontrado</h3>
+              <p className="text-gray-500">
+                {searchTerm ? 'Tente ajustar os termos de pesquisa.' : 'Comece adicionando um novo projeto.'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
