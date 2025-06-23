@@ -23,6 +23,11 @@ export async function getProjects(): Promise<Project[]> {
   return await res.json();
 }
 
+export async function getProjectsWithOperations(): Promise<Project[]> {
+  const res = await fetch('http://localhost:3001/api/projects/with-operations');
+  return await res.json();
+}
+
 export async function searchProjects(query: string): Promise<Project[]> {
   const all = await getProjects();
   return all.filter(

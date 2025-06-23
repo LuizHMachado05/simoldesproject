@@ -14,6 +14,34 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/projects/with-operations
+router.get('/with-operations', async (req, res) => {
+  try {
+    const db = await connect();
+    
+    // Buscar todos os projetos
+    const projects = await db.collection('projects').find({}).toArray();
+    
+    // Para cada projeto, buscar suas operações
+    const projectsWithOperations = await Promise.all(
+      projects.map(async (project) => {
+        const operations = await db.collection('operations')
+          .find({ projectId: project._id })
+          .toArray();
+        
+        return {
+          ...project,
+          operations: operations
+        };
+      })
+    );
+    
+    res.json(projectsWithOperations);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar projetos com operações', details: error.message });
+  }
+});
+
 // POST /api/projects
 router.post('/', async (req, res) => {
   try {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   ClipboardList, 
@@ -31,6 +31,7 @@ import {
 import { OperatorSearchModal } from './components/OperatorSearchModal';
 import { OperationActions } from './components/OperationActions';
 import { authenticateMachine } from './services/authService';
+import { getProjectsWithOperations } from './services/projectService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
 
 const IMAGES = {
@@ -39,6 +40,15 @@ const IMAGES = {
   programCapa: `${import.meta.env.BASE_URL}2d.png`,
   operation: `${import.meta.env.BASE_URL}operation.png`,
   operation2d: `${import.meta.env.BASE_URL}2d.png`,
+};
+
+// Helper function to format dates
+const formatDate = (date: string | Date | undefined): string => {
+  if (!date) return 'N/A';
+  if (typeof date === 'string') {
+    return date;
+  }
+  return date.toLocaleDateString('pt-BR');
 };
 
 interface Machine {
@@ -84,19 +94,21 @@ interface Operation {
 }
 
 interface MoldProgram {
-  id: string;
+  _id?: string;
+  id?: string;
+  projectId?: string;
   name: string;
   machine: string;
   programPath: string;
   material: string;
-  date: string;
+  date: string | Date;
   programmer: string;
   blockCenter: string;
   reference: string;
   observations: string;
   imageUrl?: string;
   status?: 'in_progress' | 'completed';
-  completedDate?: string;
+  completedDate?: string | Date;
   operations: Operation[];
 }
 
@@ -365,7 +377,48 @@ function App() {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedOperations, setExpandedOperations] = useState<number[]>([]);
-  const [programs, setPrograms] = useState<MoldProgram[]>(historicPrograms); // Using historicPrograms instead of moldPrograms
+  const [programs, setPrograms] = useState<MoldProgram[]>([]); // Inicializar vazio
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Carregar dados do banco de dados
+  useEffect(() => {
+    const loadPrograms = async () => {
+      try {
+        setIsLoading(true);
+        const projectsData = await getProjectsWithOperations();
+        
+        // Converter dados do banco para o formato MoldProgram
+        const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
+          _id: project._id,
+          id: project.projectId, // Usar projectId como id para compatibilidade
+          projectId: project.projectId,
+          name: project.name,
+          machine: project.machine,
+          programPath: project.programPath || '',
+          material: project.material || '',
+          date: project.date,
+          programmer: project.programmer || '',
+          blockCenter: project.blockCenter || '',
+          reference: project.reference || '',
+          observations: project.observations || '',
+          imageUrl: project.imageUrl || IMAGES.programCapa,
+          status: project.status,
+          completedDate: project.completedDate,
+          operations: (project as any).operations || [] // Adicionar operações se existirem
+        }));
+        
+        setPrograms(convertedPrograms);
+      } catch (error) {
+        console.error('Erro ao carregar projetos:', error);
+        // Fallback para dados mockados em caso de erro
+        setPrograms(historicPrograms);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPrograms();
+  }, []);
 
   const toggleOperationExpand = (operationId: number) => {
     setExpandedOperations(prev => 
@@ -689,9 +742,46 @@ function App() {
 
   const handleRefresh = (tab: string) => {
     setIsRefreshing(true);
+    
+    // Simular tempo de carregamento
     setTimeout(() => {
       setIsRefreshing(false);
-    }, 1000); // A animação dura 1 segundo
+      
+      // Recarregar dados do banco se for a aba de projetos
+      if (tab === 'dashboard') {
+        const loadPrograms = async () => {
+          try {
+            const projectsData = await getProjectsWithOperations();
+            
+            // Converter dados do banco para o formato MoldProgram
+            const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
+              _id: project._id,
+              id: project.projectId,
+              projectId: project.projectId,
+              name: project.name,
+              machine: project.machine,
+              programPath: project.programPath || '',
+              material: project.material || '',
+              date: project.date,
+              programmer: project.programmer || '',
+              blockCenter: project.blockCenter || '',
+              reference: project.reference || '',
+              observations: project.observations || '',
+              imageUrl: project.imageUrl || IMAGES.programCapa,
+              status: project.status,
+              completedDate: project.completedDate,
+              operations: (project as any).operations || []
+            }));
+            
+            setPrograms(convertedPrograms);
+          } catch (error) {
+            console.error('Erro ao recarregar projetos:', error);
+          }
+        };
+        
+        loadPrograms();
+      }
+    }, 1000);
   };
 
   const refreshIconClass = `h-4 w-4 transition-transform duration-1000 ${
@@ -1165,7 +1255,7 @@ function App() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-emerald-600">Projetos Ativos</p>
-                          <h3 className="text-3xl font-bold text-gray-900 mt-2">{moldPrograms.length}</h3>
+                          <h3 className="text-3xl font-bold text-gray-900 mt-2">{programs.length}</h3>
                         </div>
                         <div className="bg-emerald-100 p-3 rounded-lg">
                           <ClipboardList className="h-6 w-6 text-emerald-600" />
@@ -1183,7 +1273,7 @@ function App() {
                         <div>
                           <p className="text-sm font-medium text-blue-600">Em Andamento</p>
                           <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                            {moldPrograms.filter(p => p.operations.some(op => !op.completed)).length}
+                            {programs.filter(p => p.operations.some(op => !op.completed)).length}
                           </h3>
                         </div>
                         <div className="bg-blue-100 p-3 rounded-lg">
@@ -1202,7 +1292,7 @@ function App() {
                         <div>
                           <p className="text-sm font-medium text-purple-600">Concluídos Hoje</p>
                           <h3 className="text-3xl font-bold text-gray-900 mt-2">
-                            {moldPrograms.filter(p => p.operations.every(op => op.completed)).length}
+                            {programs.filter(p => p.operations.every(op => op.completed)).length}
                           </h3>
                         </div>
                         <div className="bg-purple-100 p-3 rounded-lg">
@@ -1246,40 +1336,53 @@ function App() {
                     </div>
                     
                     <div className="space-y-4">
-                      {moldPrograms.slice(0, 5).map((program) => (
-                        <div 
-                          key={program.id}
-                          className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
-                          onClick={() => {
-                            setSelectedProgram(program);
-                            setActiveTab('projects');
-                          }}
-                        >
-                          <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <Factory className="h-6 w-6 text-gray-500" />
-                          </div>
-                          
-                          <div className="ml-4 flex-1">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                program.operations.every(op => op.completed)
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {program.operations.every(op => op.completed) 
-                                  ? 'Concluído'
-                                  : 'Em andamento'}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center text-sm text-gray-500">
-                              <span className="mr-2">Máquina: {program.machine}</span>
-                              <span>•</span>
-                              <span className="ml-2">{program.date}</span>
-                            </div>
-                          </div>
+                      {isLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <RefreshCw className="h-6 w-6 text-gray-400 animate-spin mr-2" />
+                          <span className="text-gray-500">Carregando projetos...</span>
                         </div>
-                      ))}
+                      ) : programs.length === 0 ? (
+                        <div className="text-center py-8">
+                          <ClipboardList className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum projeto encontrado</h3>
+                          <p className="text-gray-500">Não há projetos disponíveis no momento.</p>
+                        </div>
+                      ) : (
+                        programs.slice(0, 5).map((program) => (
+                          <div 
+                            key={program._id || program.id}
+                            className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
+                            onClick={() => {
+                              setSelectedProgram(program);
+                              setActiveTab('projects');
+                            }}
+                          >
+                            <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Factory className="h-6 w-6 text-gray-500" />
+                            </div>
+                            
+                            <div className="ml-4 flex-1">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  program.operations.every(op => op.completed)
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {program.operations.every(op => op.completed) 
+                                    ? 'Concluído'
+                                    : 'Em andamento'}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center text-sm text-gray-500">
+                                <span className="mr-2">Máquina: {program.machine}</span>
+                                <span>•</span>
+                                <span className="ml-2">{formatDate(program.date)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -1370,99 +1473,112 @@ function App() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {moldPrograms.map((program) => (
-                        <div
-                          key={program.id}
-                          onClick={() => {
-                            setSelectedOperation(null);
-                            setSelectedProgram(program);
-                          }}
-                          className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden project-card"
-                        >
-                          {/* Imagem do programa */}
-                          <div className="relative h-48">
-                            <img
-                              src={program.imageUrl || IMAGES.programCapa}
-                              alt={program.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                            <div className="absolute bottom-0 left-0 right-0 p-4">
-                              <h3 className="text-lg font-semibold text-white mb-1">
-                                {program.name}
-                              </h3>
-                              <p className="text-sm text-white/90 flex items-center">
-                                <Factory className="h-4 w-4 mr-1" />
-                                Máquina: {program.machine}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Informações do programa */}
-                          <div className="p-4">
-                            <div className="flex flex-col space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Programa:</span>
-                                <span className="text-sm font-medium">{program.programPath}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Material:</span>
-                                <span className="text-sm font-medium">{program.material}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Data:</span>
-                                <span className="text-sm font-medium">{program.date}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Programador:</span>
-                                <span className="text-sm font-medium">{program.programmer}</span>
+                      {isLoading ? (
+                        <div className="col-span-full flex items-center justify-center py-12">
+                          <RefreshCw className="h-8 w-8 text-gray-400 animate-spin mr-3" />
+                          <span className="text-gray-500 text-lg">Carregando projetos...</span>
+                        </div>
+                      ) : programs.length === 0 ? (
+                        <div className="col-span-full text-center py-12">
+                          <ClipboardList className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-xl font-medium text-gray-900 mb-2">Nenhum projeto encontrado</h3>
+                          <p className="text-gray-500">Não há projetos disponíveis no momento.</p>
+                        </div>
+                      ) : (
+                        programs.map((program) => (
+                          <div
+                            key={program._id || program.id}
+                            onClick={() => {
+                              setSelectedOperation(null);
+                              setSelectedProgram(program);
+                            }}
+                            className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden project-card"
+                          >
+                            {/* Imagem do programa */}
+                            <div className="relative h-48">
+                              <img
+                                src={program.imageUrl || IMAGES.programCapa}
+                                alt={program.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <h3 className="text-lg font-semibold text-white mb-1">
+                                  {program.name}
+                                </h3>
+                                <p className="text-sm text-white/90 flex items-center">
+                                  <Factory className="h-4 w-4 mr-1" />
+                                  Máquina: {program.machine}
+                                </p>
                               </div>
                             </div>
 
-                            <div className="mt-4 pt-4 border-t border-gray-100">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Status:</span>
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                  program.operations.every(op => op.completed)
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {program.operations.every(op => op.completed) 
-                                    ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
-                                    : <><Lock className="h-3 w-3 mr-1" />Em andamento</>
-                                  }
-                                </span>
+                            {/* Informações do programa */}
+                            <div className="p-4">
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Programa:</span>
+                                  <span className="text-sm font-medium">{program.programPath}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Material:</span>
+                                  <span className="text-sm font-medium">{program.material}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Data:</span>
+                                  <span className="text-sm font-medium">{formatDate(program.date)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Programador:</span>
+                                  <span className="text-sm font-medium">{program.programmer}</span>
+                                </div>
                               </div>
 
-                              <div className="mt-2">
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-gray-500">Progresso:</span>
-                                  <span className="font-medium">
-                                    {program.operations.filter(op => op.completed).length}/{program.operations.length}
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Status:</span>
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                    program.operations.every(op => op.completed)
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {program.operations.every(op => op.completed) 
+                                      ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
+                                      : <><Lock className="h-3 w-3 mr-1" />Em andamento</>
+                                    }
                                   </span>
                                 </div>
-                                <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-[#04514B] rounded-full transition-all"
-                                    style={{
-                                      width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
-                                    }}
-                                  />
-                                </div>
-                              </div>
 
-                              {program.observations && (
-                                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                                  <div className="flex items-start gap-2">
-                                    <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                                    <p className="text-sm text-yellow-700">{program.observations}</p>
+                                <div className="mt-2">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">Progresso:</span>
+                                    <span className="font-medium">
+                                      {program.operations.filter(op => op.completed).length}/{program.operations.length}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-[#04514B] rounded-full transition-all"
+                                      style={{
+                                        width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
+                                      }}
+                                    />
                                   </div>
                                 </div>
-                              )}
+
+                                {program.observations && (
+                                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                                    <div className="flex items-start gap-2">
+                                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                                      <p className="text-sm text-yellow-700">{program.observations}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 ) : !selectedOperation ? (
@@ -1516,7 +1632,7 @@ function App() {
                             </div>
                             <div className="col-span-1 p-2 flex flex-col justify-center items-center">
                               <div className="text-xs text-gray-500">Data:</div>
-                              <div className="font-bold text-sm">{selectedProgram.date}</div>
+                              <div className="font-bold text-sm">{formatDate(selectedProgram.date)}</div>
                             </div>
                           </div>
 
@@ -1778,7 +1894,7 @@ function App() {
                         <div className="mt-6 flex justify-end space-x-4">
                           {!selectedProgram.status || selectedProgram.status !== 'completed' ? (
                             <button
-                              onClick={() => handleFinishProject(selectedProgram.id)}
+                              onClick={() => handleFinishProject(selectedProgram.projectId || selectedProgram.id || '')}
                               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
                             >
                               <CheckCircle2 className="h-5 w-5 mr-2" />
@@ -1787,11 +1903,16 @@ function App() {
                           ) : (
                             <div className="inline-flex items-center px-4 py-2 text-sm text-green-700 bg-green-50 rounded-md">
                               <CheckCircle2 className="h-5 w-5 mr-2" />
-                              Finalizado em {selectedProgram.completedDate}
+                              Finalizado em {formatDate(selectedProgram.completedDate)}
                             </div>
                           )}
                           <button
-                            onClick={() => handleExportLogs(selectedProgram.id)}
+                            onClick={() => {
+                              const projectId = selectedProgram.projectId || selectedProgram.id;
+                              if (projectId) {
+                                handleExportLogs(projectId);
+                              }
+                            }}
                             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#04514B] hover:bg-[#034038] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#04514B] transition-colors"
                           >
                             <FileSpreadsheet className="h-5 w-5 mr-2" />
@@ -1949,7 +2070,7 @@ function App() {
                             <div className="flex flex-col space-y-2">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-gray-500">Data:</span>
-                                <span className="text-sm font-medium">{program.date}</span>
+                                <span className="text-sm font-medium">{formatDate(program.date)}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-gray-500">Programador:</span>
@@ -2030,7 +2151,7 @@ function App() {
                           </div>
                           <div className="col-span-1 p-2 flex flex-col justify-center items-center">
                             <div className="text-xs text-gray-500">Data:</div>
-                            <div className="font-bold text-sm">{selectedProgram.date}</div>
+                            <div className="font-bold text-sm">{formatDate(selectedProgram.date)}</div>
                           </div>
                         </div>
 
