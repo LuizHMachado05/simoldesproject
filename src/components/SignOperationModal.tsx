@@ -1,5 +1,4 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { X, Search, User } from 'lucide-react';
+import { X, Search, User, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { searchOperators, Operator } from '../services/operatorService';
 
@@ -16,23 +15,39 @@ interface SignOperationModalProps {
 }
 
 export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperationModalProps) {
+  console.log('[DEBUG] SignOperationModal renderizado, isOpen:', isOpen);
+  console.log('[DEBUG] SignOperationModal - isOpen type:', typeof isOpen);
+  console.log('[DEBUG] SignOperationModal - isOpen value:', isOpen);
+  
   const [operatorQuery, setOperatorQuery] = useState('');
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const handleOperatorInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setOperatorQuery(e.target.value);
+    // Limpa o operador selecionado se o usuário alterar a busca
+    if (selectedOperator) {
+      setSelectedOperator(null);
+    }
+  };
+
   useEffect(() => {
-    if (operatorQuery.trim()) {
-      searchOperators(operatorQuery).then(results => {
-        setOperators(results);
-        setIsDropdownOpen(results.length > 0);
-      });
+    if (operatorQuery.trim() && !selectedOperator) {
+      const timer = setTimeout(() => {
+        searchOperators(operatorQuery).then(results => {
+          setOperators(results);
+          setIsDropdownOpen(results.length > 0);
+        });
+      }, 300); // Debounce para evitar muitas requisições
+      return () => clearTimeout(timer);
     } else {
       setOperators([]);
       setIsDropdownOpen(false);
     }
-  }, [operatorQuery]);
+  }, [operatorQuery, selectedOperator]);
 
   // Fechar dropdown quando clicar fora
   useEffect(() => {
@@ -54,150 +69,285 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
     setIsDropdownOpen(false);
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
     if (!selectedOperator) {
       alert('Por favor, selecione um operador válido');
       return;
     }
+
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
     
-    onConfirm({
-      startTime: formData.get('startTime') as string,
-      endTime: formData.get('endTime') as string,
-      measurement: formData.get('measurement') as string,
-      operatorName: `${selectedOperator.code} - ${selectedOperator.name}`,
-      notes: formData.get('notes') as string,
-    });
-    
-    // Limpa os campos após envio
-    setOperatorQuery('');
-    setSelectedOperator(null);
+    try {
+      await onConfirm({
+        startTime: formData.get('startTime') as string,
+        endTime: formData.get('endTime') as string,
+        measurement: formData.get('measurement') as string,
+        operatorName: `${selectedOperator.code} - ${selectedOperator.name}`,
+        notes: formData.get('notes') as string,
+      });
+      
+      // Limpa os campos após envio
+      setOperatorQuery('');
+      setSelectedOperator(null);
+      onClose();
+    } catch (error) {
+      // O erro já é tratado no App.tsx, mas podemos adicionar um feedback aqui se necessário
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={onClose}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 w-full max-w-md">
-          <Dialog.Title className="text-xl font-bold mb-4">
-            Assinar Operação
-          </Dialog.Title>
+    <>
+      {isOpen && (
+        <div 
+          style={{ 
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+              padding: '24px',
+              width: '90%',
+              maxWidth: '400px',
+              position: 'relative'
+            }}
+          >
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Assinar Operação</h2>
+            <p style={{ color: '#666', marginBottom: '16px' }}>Modal de teste - isOpen: {String(isOpen)}</p>
+            <p style={{ color: '#666', marginBottom: '16px' }}>Modal funcionando!</p>
+            <p style={{ color: 'green', marginBottom: '16px', fontWeight: 'bold' }}>✅ MODAL VISÍVEL!</p>
+            
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Campo de busca de operador */}
+              <div style={{ position: 'relative' }} ref={dropdownRef}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                  Operador
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    value={operatorQuery}
+                    onChange={handleOperatorInputChange}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '14px'
+                    }}
+                    placeholder="Digite código ou nome"
+                    autoComplete="off"
+                  />
+                </div>
+                
+                {/* Dropdown de resultados */}
+                {isDropdownOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    zIndex: 10,
+                    marginTop: '4px',
+                    width: '100%',
+                    backgroundColor: 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    maxHeight: '240px',
+                    overflow: 'auto'
+                  }}>
+                    {operators.map((operator) => (
+                      <div
+                        key={operator._id}
+                        style={{
+                          padding: '8px 16px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f3f4f6'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        onClick={() => handleOperatorSelect(operator)}
+                      >
+                        <div style={{ fontWeight: '500' }}>{operator.code} - {operator.name}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{operator.role}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Campo de busca de operador */}
-            <div className="relative" ref={dropdownRef}>
-              <label className="block text-sm font-medium mb-1">
-                Operador
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                    Horário Início
+                  </label>
+                  <input
+                    type="time"
+                    name="startTime"
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                    Horário Término
+                  </label>
+                  <input
+                    type="time"
+                    name="endTime"
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                  Medição (mm)
+                </label>
                 <input
                   type="text"
-                  value={operatorQuery}
-                  onChange={(e) => setOperatorQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded border-gray-300 shadow-sm"
-                  placeholder="Digite código ou nome"
-                  autoComplete="off"
-                />
-              </div>
-              
-              {/* Dropdown de resultados */}
-              {isDropdownOpen && (
-                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {operators.map((operator) => (
-                    <div
-                      key={operator._id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleOperatorSelect(operator)}
-                    >
-                      <div className="font-medium">{operator.code} - {operator.name}</div>
-                      <div className="text-sm text-gray-500">{operator.role}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Horário Início
-                </label>
-                <input
-                  type="time"
-                  name="startTime"
+                  name="measurement"
                   required
-                  className="w-full rounded border-gray-300 shadow-sm"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '14px'
+                  }}
+                  placeholder="Ex: 12.45"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  Horário Término
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                  Observações
                 </label>
-                <input
-                  type="time"
-                  name="endTime"
-                  required
-                  className="w-full rounded border-gray-300 shadow-sm"
-                />
+                <textarea
+                  name="notes"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '14px',
+                    resize: 'vertical'
+                  }}
+                  placeholder="Observações adicionais (opcional)"
+                ></textarea>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Medição (mm)
-              </label>
-              <input
-                type="text"
-                name="measurement"
-                required
-                className="w-full rounded border-gray-300 shadow-sm"
-                placeholder="Ex: 12.45"
-              />
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#374151',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!selectedOperator || isSubmitting}
+                  style={{
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    backgroundColor: selectedOperator && !isSubmitting ? '#04514B' : '#9ca3af',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: selectedOperator && !isSubmitting ? 'pointer' : 'not-allowed'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedOperator && !isSubmitting) {
+                      e.currentTarget.style.backgroundColor = '#033b36';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedOperator && !isSubmitting) {
+                      e.currentTarget.style.backgroundColor = '#04514B';
+                    }
+                  }}
+                >
+                  {isSubmitting ? 'A guardar...' : 'Confirmar'}
+                </button>
+              </div>
+            </form>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Observações
-              </label>
-              <textarea
-                name="notes"
-                rows={3}
-                className="w-full rounded border-gray-300 shadow-sm"
-                placeholder="Observações adicionais (opcional)"
-              ></textarea>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#04514B] hover:bg-[#033b36]"
-              >
-                Confirmar
-              </button>
-            </div>
-          </form>
-
-          <Dialog.Close asChild>
             <button
-              className="absolute top-4 right-4 inline-flex items-center justify-center rounded-full p-1 text-gray-400 hover:text-gray-500"
-              aria-label="Close"
+              onClick={onClose}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer',
+                color: '#9ca3af'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#6b7280'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
             >
-              <X className="h-5 w-5" />
+              ×
             </button>
-          </Dialog.Close>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          </div>
+        </div>
+      )}
+      
+      {/* Debug info sempre visível */}
+      <div style={{
+        position: 'fixed',
+        top: '10px',
+        left: '10px',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        padding: '10px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        zIndex: 10000
+      }}>
+        Modal Debug: isOpen = {String(isOpen)}
+      </div>
+    </>
   );
 }
 

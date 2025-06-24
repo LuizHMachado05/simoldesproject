@@ -31,7 +31,7 @@ export function OperationActions({
         Visualizar
       </button>
       
-      {!completed && !isHistory && (
+      {!completed && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -42,6 +42,13 @@ export function OperationActions({
           <CheckCircle2 className="h-4 w-4 mr-1" />
           Assinar
         </button>
+      )}
+
+      {completed && (
+        <div className="inline-flex items-center px-2.5 py-1.5 border border-green-300 text-xs font-medium rounded text-green-800 bg-green-100">
+          <CheckCircle2 className="h-4 w-4 mr-1" />
+          Assinado
+        </div>
       )}
       
       {completed && !isHistory && onEdit && (

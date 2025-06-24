@@ -30,15 +30,19 @@ import {
 } from 'lucide-react';
 import { OperatorSearchModal } from './components/OperatorSearchModal';
 import { OperationActions } from './components/OperationActions';
+import { SignOperationModal } from './components/SignOperationModal';
 import { authenticateMachine } from './services/authService';
-import { getProjectsWithOperations } from './services/projectService';
+import { getProjectsWithOperations, getProjectWithOperationsById } from './services/projectService';
+import { signOperation } from './services/operationService';
+import { createLog } from './services/logService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
+import { OperationCard } from './components/OperationCard';
 
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
   loginCapa: `${import.meta.env.BASE_URL}Capa Simoldes.png`,
   programCapa: `${import.meta.env.BASE_URL}2d.png`,
-  operation: `${import.meta.env.BASE_URL}operation.png`,
+  operation: `${import.meta.env.BASE_URL}2d.png`,
   operation2d: `${import.meta.env.BASE_URL}2d.png`,
 };
 
@@ -379,13 +383,14 @@ function App() {
   const [expandedOperations, setExpandedOperations] = useState<number[]>([]);
   const [programs, setPrograms] = useState<MoldProgram[]>([]); // Inicializar vazio
   const [isLoading, setIsLoading] = useState(true);
+  const [signingOperationId, setSigningOperationId] = useState<number | undefined>(undefined);
 
   // Carregar dados do banco de dados
   useEffect(() => {
     const loadPrograms = async () => {
       try {
         setIsLoading(true);
-        const projectsData = await getProjectsWithOperations();
+        const projectsData = await getProjectsWithOperations(machineId);
         
         // Converter dados do banco para o formato MoldProgram
         const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
@@ -404,7 +409,17 @@ function App() {
           imageUrl: project.imageUrl || IMAGES.programCapa,
           status: project.status,
           completedDate: project.completedDate,
-          operations: (project as any).operations || [] // Adicionar operações se existirem
+          operations: ((project as any).operations || []).map((op: any, index: number) => ({
+            ...op,
+            id: op.id || index + 1, // Garantir que cada operação tenha um ID único
+            imageUrl: op.imageUrl || IMAGES.operation, // Usar imagem padrão se não existir
+            completed: op.completed || false, // Garantir que completed seja boolean
+            signedBy: op.signedBy || undefined,
+            timestamp: op.timestamp || undefined,
+            inspectionNotes: op.inspectionNotes || undefined,
+            timeRecord: op.timeRecord || undefined,
+            measurementValue: op.measurementValue || undefined
+          }))
         }));
         
         setPrograms(convertedPrograms);
@@ -417,10 +432,14 @@ function App() {
       }
     };
 
-    loadPrograms();
-  }, []);
+    if (isAuthenticated && machineId) {
+      loadPrograms();
+    }
+  }, [isAuthenticated, machineId]);
 
-  const toggleOperationExpand = (operationId: number) => {
+  const toggleOperationExpand = (operationId: number | undefined) => {
+    if (operationId === undefined) return;
+    
     setExpandedOperations(prev => 
       prev.includes(operationId) 
         ? prev.filter(id => id !== operationId) 
@@ -684,104 +703,110 @@ function App() {
     setPassword('');
   };
 
-  const handleOperationCheck = (operationId: number) => {
-    if (!selectedProgram) return;
-
-    // Remova esta parte que verifica operações anteriores
-    /*
-    const operationIndex = selectedProgram.operations.findIndex(
-      (op) => op.id === operationId
-    );
-    const previousOperations = selectedProgram.operations.slice(0, operationIndex);
-    const allPreviousCompleted = previousOperations.every((op) => op.completed);
-
-    if (!allPreviousCompleted) {
-      alert('Por favor, complete as operações anteriores primeiro.');
+  const handleOperationCheck = (operationId: number | undefined) => {
+    console.log('[DEBUG] handleOperationCheck chamado para operationId:', operationId);
+    console.log('[DEBUG] signingOperationId antes:', signingOperationId);
+    
+    // Verificar se o operationId é válido
+    if (operationId === undefined || operationId === null) {
+      console.error('[DEBUG] operationId inválido:', operationId);
       return;
     }
-    */
-
-    // Simplesmente abra o modal de assinatura
-    setSignModal({
-      isOpen: true,
-      operationId,
-    });
-  };
-
-  const handleSignConfirm = (data: {
-    startTime: string;
-    endTime: string;
-    measurement: string;
-    operatorName: string; 
-    notes?: string;
-  }) => {
-    if (!selectedProgram || !signModal.operationId) return;
-
-    setSelectedProgram({
-      ...selectedProgram,
-      operations: selectedProgram.operations.map((op) =>
-        op.id === signModal.operationId
-          ? {
-              ...op,
-              completed: true,
-              signedBy: data.operatorName, // Usa o nome do operador fornecido
-              timestamp: new Date().toLocaleString(),
-              inspectionNotes: data.notes,
-              timeRecord: {
-                start: data.startTime,
-                end: data.endTime,
-              },
-              measurementValue: data.measurement,
-            }
-          : op
-      ),
-    });
-
-    setSignModal({ isOpen: false, operationId: null });
-  };
-
-  const handleRefresh = (tab: string) => {
-    setIsRefreshing(true);
     
-    // Simular tempo de carregamento
-    setTimeout(() => {
+    setSigningOperationId(operationId);
+    console.log('[DEBUG] Modal deve abrir agora com operationId:', operationId);
+  };
+
+  const handleSignConfirm = async (data: { operatorName: string; startTime: string; endTime: string; measurement: string; notes?: string; }) => {
+    if (!signingOperationId || !selectedProgram) return;
+    await signOperation({
+      projectId: String(selectedProgram.projectId || selectedProgram.id),
+      operationId: signingOperationId,
+      ...data
+    });
+    setSigningOperationId(undefined);
+    await handleRefreshSelectedProject();
+  };
+
+  // Função para atualizar o projeto selecionado a partir da API
+  const handleRefreshSelectedProject = async () => {
+    if (!selectedProgram) return;
+    setIsRefreshing(true);
+    try {
+      const updated = await getProjectWithOperationsById(String(selectedProgram.projectId || selectedProgram.id));
+      const safeUpdated = updated as any;
+      setSelectedProgram({
+        ...safeUpdated,
+        programPath: safeUpdated.programPath || '',
+        material: safeUpdated.material || '',
+        date: safeUpdated.date,
+        programmer: safeUpdated.programmer || '',
+        blockCenter: safeUpdated.blockCenter || '',
+        reference: safeUpdated.reference || '',
+        observations: safeUpdated.observations || '',
+        imageUrl: safeUpdated.imageUrl || IMAGES.programCapa,
+        status: safeUpdated.status,
+        completedDate: safeUpdated.completedDate,
+        operations: (safeUpdated.operations || []).map((op: any, index: number) => ({
+          ...op,
+          id: op.id || index + 1,
+          imageUrl: op.imageUrl || IMAGES.operation,
+          completed: op.completed || false,
+          signedBy: op.signedBy || undefined,
+          timestamp: op.timestamp || undefined,
+          inspectionNotes: op.inspectionNotes || undefined,
+          timeRecord: op.timeRecord || undefined,
+          measurementValue: op.measurementValue || undefined
+        }))
+      });
+      console.log('[DEBUG] Projeto recarregado da API:', updated);
+    } catch (error) {
+      alert('Erro ao atualizar projeto.');
+      console.error('Erro ao atualizar projeto:', error);
+    } finally {
       setIsRefreshing(false);
-      
-      // Recarregar dados do banco se for a aba de projetos
-      if (tab === 'dashboard') {
-        const loadPrograms = async () => {
-          try {
-            const projectsData = await getProjectsWithOperations();
-            
-            // Converter dados do banco para o formato MoldProgram
-            const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
-              _id: project._id,
-              id: project.projectId,
-              projectId: project.projectId,
-              name: project.name,
-              machine: project.machine,
-              programPath: project.programPath || '',
-              material: project.material || '',
-              date: project.date,
-              programmer: project.programmer || '',
-              blockCenter: project.blockCenter || '',
-              reference: project.reference || '',
-              observations: project.observations || '',
-              imageUrl: project.imageUrl || IMAGES.programCapa,
-              status: project.status,
-              completedDate: project.completedDate,
-              operations: (project as any).operations || []
-            }));
-            
-            setPrograms(convertedPrograms);
-          } catch (error) {
-            console.error('Erro ao recarregar projetos:', error);
-          }
-        };
+    }
+  };
+
+  // Função para atualizar todos os projetos
+  const handleRefresh = async (tab: string) => {
+    console.log('[DEBUG] handleRefresh chamado com tab:', tab, 'machineId:', machineId);
+    setIsRefreshing(true);
+    try {
+      if (tab === 'dashboard' || tab === 'projects') {
+        console.log('[DEBUG] Buscando projetos da API para máquina:', machineId);
+        const projectsData = await getProjectsWithOperations(machineId);
+        console.log('[DEBUG] Dados recebidos da API:', projectsData.length, 'projetos');
         
-        loadPrograms();
+        const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
+          _id: project._id,
+          id: project.projectId,
+          projectId: project.projectId,
+          name: project.name,
+          machine: project.machine,
+          programPath: project.programPath || '',
+          material: project.material || '',
+          date: project.date,
+          programmer: project.programmer || '',
+          blockCenter: project.blockCenter || '',
+          reference: project.reference || '',
+          observations: project.observations || '',
+          imageUrl: project.imageUrl || IMAGES.programCapa,
+          status: project.status,
+          completedDate: project.completedDate,
+          operations: (project as any).operations || []
+        }));
+        
+        console.log('[DEBUG] Projetos convertidos:', convertedPrograms.length);
+        setPrograms(convertedPrograms);
+        console.log('[DEBUG] Estado programs atualizado');
       }
-    }, 1000);
+    } catch (error) {
+      console.error('Erro ao recarregar projetos:', error);
+    } finally {
+      setIsRefreshing(false);
+      console.log('[DEBUG] Refresh finalizado');
+    }
   };
 
   const refreshIconClass = `h-4 w-4 transition-transform duration-1000 ${
@@ -1349,38 +1374,53 @@ function App() {
                         </div>
                       ) : (
                         programs.slice(0, 5).map((program) => (
-                          <div 
+                        <div 
                             key={program._id || program.id}
-                            className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
-                            onClick={() => {
-                              setSelectedProgram(program);
-                              setActiveTab('projects');
-                            }}
-                          >
-                            <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                              <Factory className="h-6 w-6 text-gray-500" />
+                          className="flex items-center p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-all border border-gray-100"
+                          onClick={async () => {
+                            setSelectedOperation(null);
+                            const freshProject = await getProjectWithOperationsById(String(program.projectId || program.id));
+                            const safeFreshProject = freshProject as any;
+                            setSelectedProgram({
+                              ...safeFreshProject,
+                              programPath: safeFreshProject.programPath || '',
+                              material: safeFreshProject.material || '',
+                              date: safeFreshProject.date,
+                              programmer: safeFreshProject.programmer || '',
+                              blockCenter: safeFreshProject.blockCenter || '',
+                              reference: safeFreshProject.reference || '',
+                              observations: safeFreshProject.observations || '',
+                              imageUrl: safeFreshProject.imageUrl || IMAGES.programCapa,
+                              status: safeFreshProject.status,
+                              completedDate: safeFreshProject.completedDate,
+                              operations: safeFreshProject.operations || []
+                            });
+                          }}
+                        >
+                          <div className="flex-shrink-0 h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Factory className="h-6 w-6 text-gray-500" />
+                          </div>
+                          
+                          <div className="ml-4 flex-1">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                program.operations.every(op => op.completed)
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {program.operations.every(op => op.completed) 
+                                  ? 'Concluído'
+                                  : 'Em andamento'}
+                              </span>
                             </div>
-                            
-                            <div className="ml-4 flex-1">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  program.operations.every(op => op.completed)
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {program.operations.every(op => op.completed) 
-                                    ? 'Concluído'
-                                    : 'Em andamento'}
-                                </span>
-                              </div>
-                              <div className="mt-1 flex items-center text-sm text-gray-500">
-                                <span className="mr-2">Máquina: {program.machine}</span>
-                                <span>•</span>
+                            <div className="mt-1 flex items-center text-sm text-gray-500">
+                              <span className="mr-2">Máquina: {program.machine}</span>
+                              <span>•</span>
                                 <span className="ml-2">{formatDate(program.date)}</span>
-                              </div>
                             </div>
                           </div>
+                        </div>
                         ))
                       )}
                     </div>
@@ -1486,97 +1526,112 @@ function App() {
                         </div>
                       ) : (
                         programs.map((program) => (
-                          <div
+                        <div
                             key={program._id || program.id}
-                            onClick={() => {
-                              setSelectedOperation(null);
-                              setSelectedProgram(program);
-                            }}
-                            className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden project-card"
-                          >
-                            {/* Imagem do programa */}
-                            <div className="relative h-48">
-                              <img
-                                src={program.imageUrl || IMAGES.programCapa}
-                                alt={program.name}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                              <div className="absolute bottom-0 left-0 right-0 p-4">
-                                <h3 className="text-lg font-semibold text-white mb-1">
-                                  {program.name}
-                                </h3>
-                                <p className="text-sm text-white/90 flex items-center">
-                                  <Factory className="h-4 w-4 mr-1" />
-                                  Máquina: {program.machine}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Informações do programa */}
-                            <div className="p-4">
-                              <div className="flex flex-col space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-500">Programa:</span>
-                                  <span className="text-sm font-medium">{program.programPath}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-500">Material:</span>
-                                  <span className="text-sm font-medium">{program.material}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-500">Data:</span>
-                                  <span className="text-sm font-medium">{formatDate(program.date)}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-500">Programador:</span>
-                                  <span className="text-sm font-medium">{program.programmer}</span>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-gray-500">Status:</span>
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                    program.operations.every(op => op.completed)
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {program.operations.every(op => op.completed) 
-                                      ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
-                                      : <><Lock className="h-3 w-3 mr-1" />Em andamento</>
-                                    }
-                                  </span>
-                                </div>
-
-                                <div className="mt-2">
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-500">Progresso:</span>
-                                    <span className="font-medium">
-                                      {program.operations.filter(op => op.completed).length}/{program.operations.length}
-                                    </span>
-                                  </div>
-                                  <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-[#04514B] rounded-full transition-all"
-                                      style={{
-                                        width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-
-                                {program.observations && (
-                                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                                    <div className="flex items-start gap-2">
-                                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                                      <p className="text-sm text-yellow-700">{program.observations}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                          onClick={async () => {
+                            setSelectedOperation(null);
+                            const freshProject = await getProjectWithOperationsById(String(program.projectId || program.id));
+                            const safeFreshProject = freshProject as any;
+                            setSelectedProgram({
+                              ...safeFreshProject,
+                              programPath: safeFreshProject.programPath || '',
+                              material: safeFreshProject.material || '',
+                              date: safeFreshProject.date,
+                              programmer: safeFreshProject.programmer || '',
+                              blockCenter: safeFreshProject.blockCenter || '',
+                              reference: safeFreshProject.reference || '',
+                              observations: safeFreshProject.observations || '',
+                              imageUrl: safeFreshProject.imageUrl || IMAGES.programCapa,
+                              status: safeFreshProject.status,
+                              completedDate: safeFreshProject.completedDate,
+                              operations: safeFreshProject.operations || []
+                            });
+                          }}
+                          className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden project-card"
+                        >
+                          {/* Imagem do programa */}
+                          <div className="relative h-48">
+                            <img
+                              src={program.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
+                              alt={program.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                            <div className="absolute bottom-0 left-0 right-0 p-4">
+                              <h3 className="text-lg font-semibold text-white mb-1">
+                                {program.name}
+                              </h3>
+                              <p className="text-sm text-white/90 flex items-center">
+                                <Factory className="h-4 w-4 mr-1" />
+                                Máquina: {program.machine}
+                              </p>
                             </div>
                           </div>
+
+                          {/* Informações do programa */}
+                          <div className="p-4">
+                            <div className="flex flex-col space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-500">Programa:</span>
+                                <span className="text-sm font-medium">{program.programPath}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-500">Material:</span>
+                                <span className="text-sm font-medium">{program.material}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-500">Data:</span>
+                                  <span className="text-sm font-medium">{formatDate(program.date)}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-500">Programador:</span>
+                                <span className="text-sm font-medium">{program.programmer}</span>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t border-gray-100">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-500">Status:</span>
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                  program.operations.every(op => op.completed)
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {program.operations.every(op => op.completed) 
+                                    ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
+                                    : <><Lock className="h-3 w-3 mr-1" />Em andamento</>
+                                  }
+                                </span>
+                              </div>
+
+                              <div className="mt-2">
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-gray-500">Progresso:</span>
+                                  <span className="font-medium">
+                                    {program.operations.filter(op => op.completed).length}/{program.operations.length}
+                                  </span>
+                                </div>
+                                <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-[#04514B] rounded-full transition-all"
+                                    style={{
+                                      width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {program.observations && (
+                                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                                  <div className="flex items-start gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                                    <p className="text-sm text-yellow-700">{program.observations}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                         ))
                       )}
                     </div>
@@ -1605,7 +1660,7 @@ function App() {
                         
                         {/* Botão de atualizar */}
                         <button 
-                          onClick={() => handleRefresh('projects')}
+                          onClick={handleRefreshSelectedProject}
                           className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-white rounded-lg shadow-sm hover:shadow transition-all"
                         >
                           <RefreshCw className={refreshIconClass} />
@@ -1661,7 +1716,7 @@ function App() {
                           {/* Imagem central */}
                           <div className="p-4 flex justify-center">
                             <img
-                              src={selectedProgram.imageUrl}
+                              src={selectedProgram.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
                               alt="Visualização do programa"
                               className="max-h-96 w-full object-contain"
                             />
@@ -1687,208 +1742,58 @@ function App() {
                         </div>
 
                         {/* Lista de operações */}
-                        <div className="bg-white shadow rounded-lg p-6">
-                          <h3 className="text-lg font-medium text-gray-900 mb-4">
-                            Operações
-                          </h3>
-                          <div className="space-y-6">
-                            {/* Operação atual - Visualização expandida */}
-                            {selectedProgram.operations.map((operation, index) => {
-                              const isExpanded = expandedOperations.includes(operation.id);
-                              
-                              // Determine a classe de fundo apenas com base no status de conclusão
-                              const bgColorClass = operation.completed 
-                                ? 'bg-gray-50' 
-                                : 'bg-yellow-50';
-                              
-                              return (
-                                <div key={operation.id} className={`${bgColorClass} border border-gray-200 rounded-lg shadow mb-4`}>
-                                  {/* Cabeçalho da operação com botão para expandir/recolher */}
-                                  <div className="p-4 flex justify-between items-center border-b border-gray-200">
-                                    <div>
-                                      <h4 className="text-lg font-medium text-gray-900">
-                                        Operação {operation.sequence} - {operation.type}
-                                      </h4>
-                                      <p className="text-sm text-gray-500">{operation.function}</p>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                      {operation.completed && (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                                          Concluído
-                                        </span>
-                                      )}
-                                      <button 
-                                        onClick={() => toggleOperationExpand(operation.id)}
-                                        className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                                      >
-                                        {isExpanded ? 'Recolher' : 'Expandir'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Conteúdo expandido */}
-                                  {isExpanded && (
-                                    <div className="p-4">
-                                      {/* Grid responsivo */}
-                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-                                        {/* Coluna da esquerda */}
-                                        <div className="space-y-4">
-                                          {/* Parâmetros */}
-                                          <div className="overflow-x-auto">
-                                            <h5 className="text-sm font-medium text-gray-700 mb-2">Parâmetros</h5>
-                                            <dl className="divide-y divide-gray-200">
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Ferramenta:</dt>
-                                                <dd className="text-gray-900">{operation.toolRef}</dd>
+                        {selectedProgram && !selectedOperation && (
+                          <section className="bg-white shadow rounded-lg p-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Operações do Projeto</h2>
+                            <div className="flex flex-col gap-6">
+                              {selectedProgram.operations.length === 0 && (
+                                <div className="text-center text-gray-500">Nenhuma operação cadastrada para este projeto.</div>
+                              )}
+                              {selectedProgram.operations.map((operation, index) => (
+                                <OperationCard
+                                  key={`${selectedProgram.id}-${operation.id || index}`}
+                                  operation={operation}
+                                  expanded={expandedOperations.includes(operation.id || index)}
+                                  onExpand={() => toggleOperationExpand(operation.id || index)}
+                                  onSign={() => { 
+                                    console.log('[DEBUG] onSign do OperationCard', operation.id || index); 
+                                    console.log('[DEBUG] operation.completed:', operation.completed);
+                                    console.log('[DEBUG] selectedProgram:', selectedProgram);
+                                    handleOperationCheck(operation.id || index); 
+                                  }}
+                                  onView={() => setSelectedOperation(operation)}
+                                />
+                              ))}
                                               </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Ponto Central:</dt>
-                                                <dd className="text-gray-900">{operation.centerPoint}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">IC:</dt>
-                                                <dd className="text-gray-900">{operation.ic}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">ALT:</dt>
-                                                <dd className="text-gray-900">{operation.alt}</dd>
-                                              </div>
-                                            </dl>
-                                          </div>
-
-                                          {/* Detalhes */}
-                                          <div>
-                                            <h5 className="text-sm font-medium text-gray-700 mb-2">Detalhes</h5>
-                                            <dl className="divide-y divide-gray-200">
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Profundidade:</dt>
-                                                <dd className="text-gray-900">{operation.details.depth}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Velocidade:</dt>
-                                                <dd className="text-gray-900">{operation.details.speed}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Avanço:</dt>
-                                                <dd className="text-gray-900">{operation.details.feed}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Refrigeração:</dt>
-                                                <dd className="text-gray-900">{operation.details.coolant}</dd>
-                                              </div>
-                                              {operation.details.notes && (
-                                                <div className="grid grid-cols-2 py-1">
-                                                  <dt className="text-gray-500">Notas:</dt>
-                                                  <dd className="text-gray-900">{operation.details.notes}</dd>
-                                                </div>
-                                              )}
-                                            </dl>
-                                          </div>
-
-                                          {/* Qualidade */}
-                                          <div>
-                                            <h5 className="text-sm font-medium text-gray-700 mb-2">Qualidade</h5>
-                                            <dl className="divide-y divide-gray-200">
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Tolerância:</dt>
-                                                <dd className="text-gray-900">{operation.quality.tolerance}</dd>
-                                              </div>
-                                              <div className="grid grid-cols-2 py-1">
-                                                <dt className="text-gray-500">Acabamento:</dt>
-                                                <dd className="text-gray-900">{operation.quality.surfaceFinish}</dd>
-                                              </div>
-                                            </dl>
-                                          </div>
-                                          
-                                          {/* Botão de assinar (movido para a parte inferior esquerda) */}
-                                          {!operation.completed && (
-                                            <div className="mt-4">
-                                              <button
-                                                onClick={() => handleOperationCheck(operation.id)}
-                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                              >
-                                                <CheckCircle2 className="h-5 w-5 mr-2" />
-                                                Assinar Operação
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* Coluna da direita */}
-                                        <div className="space-y-4">
-                                          {/* Status da operação */}
-                                          {operation.completed && (
-                                            <div className="bg-green-50 p-3 rounded-lg">
-                                              <h5 className="text-sm font-medium text-gray-700 mb-2">Detalhes da Conclusão</h5>
-                                              <dl className="divide-y divide-gray-200">
-                                                <div className="grid grid-cols-2 py-1">
-                                                  <dt className="text-gray-500">Assinado por:</dt>
-                                                  <dd className="text-gray-900">{operation.signedBy}</dd>
-                                                </div>
-                                                <div className="grid grid-cols-2 py-1">
-                                                  <dt className="text-gray-500">Data/Hora:</dt>
-                                                  <dd className="text-gray-900">{operation.timestamp}</dd>
-                                                </div>
-                                                {operation.timeRecord && (
-                                                  <>
-                                                    <div className="grid grid-cols-2 py-1">
-                                                      <dt className="text-gray-500">Início:</dt>
-                                                      <dd className="text-gray-900">{operation.timeRecord.start}</dd>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 py-1">
-                                                      <dt className="text-gray-500">Término:</dt>
-                                                      <dd className="text-gray-900">{operation.timeRecord.end}</dd>
-                                                    </div>
-                                                  </>
-                                                )}
-                                                {operation.measurementValue && (
-                                                  <div className="grid grid-cols-2 py-1">
-                                                    <dt className="text-gray-500">Medição:</dt>
-                                                    <dd className="text-gray-900">{operation.measurementValue} mm</dd>
-                                                  </div>
-                                                )}
-                                              </dl>
-                                            </div>
-                                          )}
-
-                                          {/* Botão de visualizar */}
-                                          <div className="flex justify-end">
-                                            <button
-                                              onClick={() => setSelectedOperation(operation)}
-                                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                            >
-                                              <Eye className="h-4 w-4 mr-2" />
-                                              Visualizar Detalhes
-                                            </button>
-                                          </div>
-
-                                          {/* Visualização 2D */}
-                                          <div className={`${operation.completed ? 'bg-gray-50' : 'bg-yellow-50'} p-3 rounded-lg`}>
-                                            <h5 className="text-sm font-medium text-gray-700 mb-2">
-                                              Visualização 2D
-                                            </h5>
-                                            <div className="relative w-full h-0 pb-[75%] rounded overflow-hidden">
-                                              <div className="absolute inset-0 flex items-center justify-center p-4">
-                                                <img
-                                                  src={IMAGES.operation2d}
-                                                  alt="Visualização da operação"
-                                                  className="max-w-[80%] max-h-[80%] object-contain"
-                                                />
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                            <SignOperationModal
+                              isOpen={signingOperationId !== undefined}
+                              onClose={() => setSigningOperationId(undefined)}
+                              onConfirm={handleSignConfirm}
+                            />
                             
-                            {/* Tabela com outras operações - REMOVIDA */}
-                          </div>
-                        </div>
+                            {/* Botão de teste temporário */}
+                            <button
+                              onClick={() => {
+                                console.log('[DEBUG] Botão de teste clicado');
+                                setSigningOperationId(999);
+                              }}
+                              style={{
+                                position: 'fixed',
+                                top: '20px',
+                                right: '20px',
+                                padding: '10px 20px',
+                                backgroundColor: 'red',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                zIndex: 10000
+                              }}
+                            >
+                              Testar Modal
+                            </button>
+                          </section>
+                        )}
 
                         {/* Export and Finish Project Buttons */}
                         <div className="mt-6 flex justify-end space-x-4">
@@ -1935,10 +1840,10 @@ function App() {
                         </button>
                         <div>
                           <h2 className="text-lg font-medium text-gray-900">
-                            Operação {selectedOperation.sequence} - {selectedOperation.type}
+                            Operação {selectedOperation?.sequence} - {selectedOperation?.type}
                           </h2>
                           <p className="text-sm text-gray-500">
-                            {selectedOperation.function}
+                            {selectedOperation?.function}
                           </p>
                         </div>
                       </div>
@@ -1951,25 +1856,25 @@ function App() {
                             </h3>
                             <dl className="grid grid-cols-2 gap-2 text-sm">
                               <dt className="text-gray-500">Ferramenta:</dt>
-                              <dd className="text-gray-900">{selectedOperation.toolRef}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.toolRef}</dd>
                               <dt className="text-gray-500">Velocidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.speed}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.speed}</dd>
                               <dt className="text-gray-500">Avanço:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.feed}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.feed}</dd>
                               <dt className="text-gray-500">Profundidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.depth}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.depth}</dd>
                               <dt className="text-gray-500">Tolerância:</dt>
-                              <dd className="text-gray-900">{selectedOperation.quality.tolerance}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.quality.tolerance}</dd>
                               <dt className="text-gray-500">Acabamento:</dt>
-                              <dd className="text-gray-900">{selectedOperation.quality.surfaceFinish}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.quality.surfaceFinish}</dd>
                               <dt className="text-gray-500">Operador:</dt>
-                              <dd className="text-gray-900">{selectedOperation.signedBy}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.signedBy}</dd>
                               <dt className="text-gray-500">Medição:</dt>
-                              <dd className="text-gray-900">{selectedOperation.measurementValue}mm</dd>
+                              <dd className="text-gray-900">{selectedOperation?.measurementValue}mm</dd>
                             </dl>
                           </div>
 
-                          {selectedOperation.details.notes && (
+                          {selectedOperation?.details.notes && (
                             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
                               <div className="flex">
                                 <div className="flex-shrink-0">
@@ -1994,7 +1899,7 @@ function App() {
                           </h3>
                           <div className="aspect-w-16 aspect-h-9">
                             <img
-                              src={selectedProgram.imageUrl || IMAGES.programCapa}
+                              src={selectedProgram.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
                               alt="Visualização da operação"
                               className="w-full h-full object-contain rounded-lg"
                             />
@@ -2049,7 +1954,7 @@ function App() {
                           {/* Imagem do programa */}
                           <div className="relative h-48">
                             <img
-                              src={program.imageUrl || IMAGES.programCapa}
+                              src={program.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
                               alt={program.name}
                               className="w-full h-full object-cover"
                             />
@@ -2158,7 +2063,7 @@ function App() {
                         {/* Imagem central */}
                         <div className="p-4 flex justify-center">
                           <img
-                            src={selectedProgram.imageUrl}
+                            src={selectedProgram.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
                             alt="Visualização do programa"
                             className="max-h-96 w-full object-contain"
                           />
@@ -2215,7 +2120,10 @@ function App() {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {selectedProgram.operations.map((operation) => (
-                                <tr key={operation.id} className="hover:bg-gray-50">
+                                <tr 
+                                  key={operation.id} 
+                                  className={`hover:bg-gray-50 ${operation.completed ? 'bg-green-50' : ''}`}
+                                >
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.sequence}</td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.type}</td>
                                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.function}</td>
@@ -2244,7 +2152,7 @@ function App() {
                                       operationId={operation.id}
                                       completed={operation.completed}
                                       onView={() => setSelectedOperation(operation)}
-                                      onSign={() => {}}
+                                      onSign={() => handleOperationCheck(operation.id)}
                                       isHistory={true}
                                     />
                                   </td>
@@ -2269,10 +2177,10 @@ function App() {
                         </button>
                         <div>
                           <h2 className="text-lg font-medium text-gray-900">
-                            Operação {selectedOperation.sequence} - {selectedOperation.type}
+                            Operação {selectedOperation?.sequence} - {selectedOperation?.type}
                           </h2>
                           <p className="text-sm text-gray-500">
-                            {selectedOperation.function}
+                            {selectedOperation?.function}
                           </p>
                         </div>
                       </div>
@@ -2285,25 +2193,25 @@ function App() {
                             </h3>
                             <dl className="grid grid-cols-2 gap-2 text-sm">
                               <dt className="text-gray-500">Ferramenta:</dt>
-                              <dd className="text-gray-900">{selectedOperation.toolRef}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.toolRef}</dd>
                               <dt className="text-gray-500">Velocidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.speed}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.speed}</dd>
                               <dt className="text-gray-500">Avanço:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.feed}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.feed}</dd>
                               <dt className="text-gray-500">Profundidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation.details.depth}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.details.depth}</dd>
                               <dt className="text-gray-500">Tolerância:</dt>
-                              <dd className="text-gray-900">{selectedOperation.quality.tolerance}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.quality.tolerance}</dd>
                               <dt className="text-gray-500">Acabamento:</dt>
-                              <dd className="text-gray-900">{selectedOperation.quality.surfaceFinish}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.quality.surfaceFinish}</dd>
                               <dt className="text-gray-500">Operador:</dt>
-                              <dd className="text-gray-900">{selectedOperation.signedBy}</dd>
+                              <dd className="text-gray-900">{selectedOperation?.signedBy}</dd>
                               <dt className="text-gray-500">Medição:</dt>
-                              <dd className="text-gray-900">{selectedOperation.measurementValue}mm</dd>
+                              <dd className="text-gray-900">{selectedOperation?.measurementValue}mm</dd>
                             </dl>
                           </div>
 
-                          {selectedOperation.details.notes && (
+                          {selectedOperation?.details.notes && (
                             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
                               <div className="flex">
                                 <div className="flex-shrink-0">
@@ -2328,7 +2236,7 @@ function App() {
                           </h3>
                           <div className="aspect-w-16 aspect-h-9">
                             <img
-                              src={selectedProgram.imageUrl || IMAGES.programCapa}
+                              src={selectedProgram.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
                               alt="Visualização da operação"
                               className="w-full h-full object-contain rounded-lg"
                             />
@@ -2348,19 +2256,6 @@ function App() {
           </main>
         </div>
       </div>
-      <OperatorSearchModal
-        isOpen={signModal.isOpen}
-        onClose={() => setSignModal({ isOpen: false, operationId: null })}
-        onSelect={(operator) => {
-          handleSignConfirm({
-            startTime: '',
-            endTime: '',
-            measurement: '',
-            operatorName: operator.name,
-            notes: ''
-          });
-        }}
-      />
     </>
   );
 }

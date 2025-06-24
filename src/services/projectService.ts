@@ -23,8 +23,12 @@ export async function getProjects(): Promise<Project[]> {
   return await res.json();
 }
 
-export async function getProjectsWithOperations(): Promise<Project[]> {
-  const res = await fetch('http://localhost:3001/api/projects/with-operations');
+export async function getProjectsWithOperations(machine?: string): Promise<Project[]> {
+  let url = 'http://localhost:3001/api/projects/with-operations';
+  if (machine) {
+    url += `?machine=${encodeURIComponent(machine)}`;
+  }
+  const res = await fetch(url);
   return await res.json();
 }
 
@@ -54,15 +58,30 @@ export async function createProject(project: Omit<Project, '_id'>): Promise<Proj
 }
 
 export async function updateProject(id: string, project: Partial<Project>): Promise<void> {
-  await fetch(`http://localhost:3001/api/projects/${id}`, {
+  const res = await fetch(`http://localhost:3001/api/projects/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(project),
   });
+  
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(`Erro ${res.status}: ${errorData.error || res.statusText}`);
+  }
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await fetch(`http://localhost:3001/api/projects/${id}`, {
+  const res = await fetch(`http://localhost:3001/api/projects/${id}`, {
     method: 'DELETE',
   });
+  
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(`Erro ${res.status}: ${errorData.error || res.statusText}`);
+  }
+}
+
+export async function getProjectWithOperationsById(projectId: string): Promise<Project> {
+  const res = await fetch(`http://localhost:3001/api/projects/with-operations/${projectId}`);
+  return await res.json();
 } 

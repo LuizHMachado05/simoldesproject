@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { getOperators, createOperator, updateOperator, deleteOperator, Operator } from '../services/operatorService';
 import { getMachines, createMachine, updateMachine, deleteMachine, Machine } from '../services/machineService';
-import { getProjects, createProject, updateProject, deleteProject, Project } from '../services/projectService';
+import { getProjectsWithOperations, createProject, updateProject, deleteProject, Project } from '../services/projectService';
 import { getLogs, createLog, deleteLog, clearOldLogs, Log, LogFilters } from '../services/logService';
 import machinesData from '../data/machines.json';
 import { ProgramEditModal } from './ProgramEditModal';
@@ -177,9 +177,13 @@ export function AdminPanel(): ReactElement {
       setFilteredMachines(machinesData);
       
       // Carregar projetos da API
-      const projectsData = await getProjects();
-      setPrograms(projectsData);
-      setFilteredPrograms(projectsData);
+      const projectsData = await getProjectsWithOperations();
+      const programsData = projectsData.map(project => ({
+        ...project,
+        operations: project.operations || []
+      }));
+      setPrograms(programsData);
+      setFilteredPrograms(programsData);
       
       // Carregar logs da API
       const logsData = await getLogs();
@@ -236,9 +240,13 @@ export function AdminPanel(): ReactElement {
         
         case 'programs':
           // Recarregar projetos da API
-          const projectsData = await getProjects();
-          setPrograms(projectsData);
-          setFilteredPrograms(projectsData);
+          const projectsData = await getProjectsWithOperations();
+          const programsData = projectsData.map(project => ({
+            ...project,
+            operations: project.operations || []
+          }));
+          setPrograms(programsData);
+          setFilteredPrograms(programsData);
           break;
         
         case 'logs':
@@ -489,6 +497,7 @@ export function AdminPanel(): ReactElement {
         await deleteProject(program._id);
         await refreshPrograms();
       } catch (error) {
+        console.error('Erro ao remover projeto:', error);
         alert('Erro ao remover projeto');
       }
     }
@@ -500,11 +509,11 @@ export function AdminPanel(): ReactElement {
 
   const refreshPrograms = async () => {
     try {
-      const projectsData = await getProjects();
+      const projectsData = await getProjectsWithOperations();
       // Converter Project[] para MoldProgram[] adicionando operations
       const programsData = projectsData.map(project => ({
         ...project,
-        operations: [] // Adicionar array vazio de operations
+        operations: project.operations || [] // Usar operations do projeto se existir
       }));
       setPrograms(programsData);
       setFilteredPrograms(programsData);
@@ -552,6 +561,7 @@ export function AdminPanel(): ReactElement {
         operations: []
       });
     } catch (error) {
+      console.error('Erro ao adicionar projeto:', error);
       alert('Erro ao adicionar projeto');
     }
   };
@@ -567,6 +577,7 @@ export function AdminPanel(): ReactElement {
       await refreshPrograms();
       setShowDetailedEditModal(null);
     } catch (error) {
+      console.error('Erro ao salvar projeto:', error);
       alert('Erro ao salvar projeto');
     }
   };
