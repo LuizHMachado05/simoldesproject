@@ -108,7 +108,7 @@ interface MoldProgram {
   reference: string;
   observations: string;
   imageUrl?: string;
-  status?: 'in_progress' | 'completed';
+  status?: 'in_progress' | 'completed' | 'cancelled';
   completedDate?: string | Date;
   operations: Operation[];
 }
@@ -387,6 +387,8 @@ function App() {
   const [operatorLoginModal, setOperatorLoginModal] = useState(false);
   const [operatorCode, setOperatorCode] = useState('');
   const [operatorPassword, setOperatorPassword] = useState('');
+  // Adicionar estado para o filtro de status
+  const [historyStatus, setHistoryStatus] = useState<string>('all');
 
   // Carregar dados do banco de dados
   useEffect(() => {
@@ -1604,7 +1606,9 @@ function App() {
                           <p className="text-gray-500">Não há projetos disponíveis no momento.</p>
                         </div>
                       ) : (
-                        programs.map((program) => (
+                        programs
+                          .filter(program => program.status !== 'completed')
+                          .map((program) => (
                         <div
                             key={program._id || program.id}
                           onClick={async () => {
@@ -1999,107 +2003,90 @@ function App() {
                       <h2 className="text-2xl font-bold text-gray-900">
                         Histórico de Projetos
                       </h2>
-                      <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                        <select 
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#04514B]"
-                          defaultValue="all"
-                        >
-                          <option value="all">Todos os Status</option>
-                          <option value="completed">Concluídos</option>
-                          <option value="cancelled">Cancelados</option>
-                        </select>
-                        <select 
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#04514B]"
-                          defaultValue="30"
-                        >
-                          <option value="7">Últimos 7 dias</option>
-                          <option value="30">Últimos 30 dias</option>
-                          <option value="90">Últimos 90 dias</option>
-                          <option value="all">Todo período</option>
-                        </select>
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {historicPrograms.map((program) => (
-                        <div
-                          key={program.id}
-                          onClick={() => {
-                            setSelectedOperation(null);
-                            setSelectedProgram(program);
-                          }}
-                          className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden"
-                        >
-                          {/* Imagem do programa */}
-                          <div className="relative h-48">
-                            <img
-                              src={program.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
-                              alt={program.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                            <div className="absolute bottom-0 left-0 right-0 p-4">
-                              <h3 className="text-lg font-semibold text-white mb-1">
-                                {program.name}
-                              </h3>
-                              <p className="text-sm text-white/90 flex items-center">
-                                <Factory className="h-4 w-4 mr-1" />
-                                Máquina: {program.machine}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Informações do programa */}
-                          <div className="p-4">
-                            <div className="flex flex-col space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Data:</span>
-                                <span className="text-sm font-medium">{formatDate(program.date)}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Programador:</span>
-                                <span className="text-sm font-medium">{program.programmer}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Material:</span>
-                                <span className="text-sm font-medium">{program.material}</span>
+                      {programs
+                        .filter(program => program.status === 'completed')
+                        .map((program) => (
+                          <div
+                            key={program.id}
+                            onClick={() => {
+                              setSelectedOperation(null);
+                              setSelectedProgram(program);
+                            }}
+                            className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden"
+                          >
+                            {/* Imagem do programa */}
+                            <div className="relative h-48">
+                              <img
+                                src={program.imageUrl || `${import.meta.env.BASE_URL}2d.png`}
+                                alt={program.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <h3 className="text-lg font-semibold text-white mb-1">
+                                  {program.name}
+                                </h3>
+                                <p className="text-sm text-white/90 flex items-center">
+                                  <Factory className="h-4 w-4 mr-1" />
+                                  Máquina: {program.machine}
+                                </p>
                               </div>
                             </div>
 
-                            <div className="mt-4 pt-4 border-t border-gray-100">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-500">Status:</span>
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                  program.operations.every(op => op.completed)
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {program.operations.every(op => op.completed) 
-                                    ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
-                                    : <><AlertTriangle className="h-3 w-3 mr-1" />Em andamento</>
-                                  }
-                                </span>
+                            {/* Informações do programa */}
+                            <div className="p-4">
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Data:</span>
+                                  <span className="text-sm font-medium">{formatDate(program.date)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Programador:</span>
+                                  <span className="text-sm font-medium">{program.programmer}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Material:</span>
+                                  <span className="text-sm font-medium">{program.material}</span>
+                                </div>
                               </div>
-                              <div className="mt-2">
-                                <div className="flex justify-between items-center text-sm">
-                                  <span className="text-gray-500">Operações:</span>
-                                  <span className="font-medium">
-                                    {program.operations.filter(op => op.completed).length}/{program.operations.length}
+
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-500">Status:</span>
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                    program.operations.every(op => op.completed)
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {program.operations.every(op => op.completed) 
+                                      ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
+                                      : <><AlertTriangle className="h-3 w-3 mr-1" />Em andamento</>
+                                    }
                                   </span>
                                 </div>
-                                <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-[#04514B] rounded-full transition-all"
-                                    style={{
-                                      width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
-                                    }}
-                                  />
+                                <div className="mt-2">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">Operações:</span>
+                                    <span className="font-medium">
+                                      {program.operations.filter(op => op.completed).length}/{program.operations.length}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-[#04514B] rounded-full transition-all"
+                                      style={{
+                                        width: `${(program.operations.filter(op => op.completed).length / program.operations.length) * 100}%`
+                                      }}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   </div>
                 ) : !selectedOperation ? (
@@ -2179,67 +2166,40 @@ function App() {
                         </div>
                       </div>
 
-                      {/* Tabela de operações */}
-                      <div className="mt-8">
-                        <div className="bg-white shadow rounded-lg overflow-hidden">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seq.</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Função</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ferramenta</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parâmetros</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qualidade</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operador</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horário</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medição</th>
-                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {selectedProgram.operations.map((operation) => (
-                                <tr 
-                                  key={operation.id} 
-                                  className={`hover:bg-gray-50 ${operation.completed ? 'bg-green-50' : ''}`}
-                                >
-                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.sequence}</td>
-                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.type}</td>
-                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.function}</td>
-                                  <td className="px-3 py-2 text-sm text-gray-500">
-                                    <div className="max-w-xs truncate">{operation.toolRef}</div>
-                                  </td>
-                                  <td className="px-3 py-2 text-sm text-gray-900">
-                                    <div className="space-y-1">
-                                      <div>Vel: {operation.details.speed}</div>
-                                      <div>Av: {operation.details.feed}</div>
-                                      <div>Prof: {operation.details.depth}</div>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2 text-sm text-gray-900">
-                                    <div>Tol: {operation.quality.tolerance}</div>
-                                    <div>Acab: {operation.quality.surfaceFinish}</div>
-                                  </td>
-                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{operation.signedBy}</td>
-                                  <td className="px-3 py-2 text-sm text-gray-900">
-                                    <div>Início: {operation.timeRecord?.start}</div>
-                                    <div>Fim: {operation.timeRecord?.end}</div>
-                                  </td>
-                                  <td className="px-3 py-2 text-sm text-gray-900">{operation.measurementValue}mm</td>
-                                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                    <OperationActions
-                                      operationId={operation.id}
-                                      completed={operation.completed}
-                                      onView={() => setSelectedOperation(operation)}
-                                      onSign={() => handleOperationCheck(operation.id)}
-                                      isHistory={true}
-                                    />
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                      {/* Lista de operações expansiva */}
+                      <section className="bg-white shadow rounded-lg p-6">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Operações do Projeto</h2>
+                        <div className="flex flex-col gap-6">
+                          {selectedProgram.operations.length === 0 && (
+                            <div className="text-center text-gray-500">Nenhuma operação cadastrada para este projeto.</div>
+                          )}
+                          {selectedProgram.operations.map((operation, index) => (
+                            <OperationCard
+                              key={`${selectedProgram.id}-${operation.id || index}`}
+                              operation={operation}
+                              expanded={expandedOperations.includes(operation.id || index)}
+                              onExpand={() => toggleOperationExpand(operation.id || index)}
+                              onSign={() => {}}
+                              onView={() => setSelectedOperation(operation)}
+                            />
+                          ))}
                         </div>
+                      </section>
+
+                      {/* Botão de exportar logs */}
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={() => {
+                            const projectId = selectedProgram.projectId || selectedProgram.id;
+                            if (projectId) {
+                              handleExportLogs(projectId);
+                            }
+                          }}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#04514B] hover:bg-[#034038] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#04514B] transition-colors"
+                        >
+                          <FileSpreadsheet className="h-5 w-5 mr-2" />
+                          Exportar Logs em Excel
+                        </button>
                       </div>
                     </div>
                   </div>
