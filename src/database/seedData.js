@@ -60,34 +60,36 @@ async function seedMachines(db) {
 async function seedOperators(db) {
   const operators = [
     {
-      name: 'João Silva',
-      code: 'JS001',
+      name: 'Administrador',
+      code: 'admin',
+      password: 'admin123',
+      role: 'admin',
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      name: 'Operador 1',
+      code: 'op1',
+      password: 'op1pass',
       role: 'operator',
       active: true,
       createdAt: new Date(),
       updatedAt: new Date()
     },
     {
-      name: 'Maria Santos',
-      code: 'MS001',
-      role: 'supervisor',
-      active: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    },
-    {
-      name: 'Carlos Oliveira',
-      code: 'CO001',
-      role: 'admin',
+      name: 'Operador 2',
+      code: 'op2',
+      password: 'op2pass',
+      role: 'operator',
       active: true,
       createdAt: new Date(),
       updatedAt: new Date()
     }
   ];
-
   await db.collection('operators').deleteMany({});
-  const result = await db.collection('operators').insertMany(operators);
-  return result.insertedIds;
+  await db.collection('operators').insertMany(operators);
+  console.log('Operadores seed criados com sucesso!');
 }
 
 async function seedProjectsAndOperations(db, machines, operators) {

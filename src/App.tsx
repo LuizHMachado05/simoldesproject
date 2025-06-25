@@ -37,6 +37,8 @@ import { signOperation } from './services/operationService';
 import { createLog } from './services/logService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
 import { OperationCard } from './components/OperationCard';
+import type { Machine } from './services/authService';
+import { authenticateOperator, Operator } from './services/operatorService';
 
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
@@ -54,11 +56,6 @@ const formatDate = (date: string | Date | undefined): string => {
   }
   return date.toLocaleDateString('pt-BR');
 };
-
-interface Machine {
-  id: string;
-  name: string;
-}
 
 interface Operation {
   id: number;
@@ -384,6 +381,12 @@ function App() {
   const [programs, setPrograms] = useState<MoldProgram[]>([]); // Inicializar vazio
   const [isLoading, setIsLoading] = useState(true);
   const [signingOperationId, setSigningOperationId] = useState<number | undefined>(undefined);
+  // Adicionar estado para guardar dados da máquina autenticada
+  const [authenticatedMachine, setAuthenticatedMachine] = useState<Machine | null>(null);
+  const [operator, setOperator] = useState<Operator | null>(null);
+  const [operatorLoginModal, setOperatorLoginModal] = useState(false);
+  const [operatorCode, setOperatorCode] = useState('');
+  const [operatorPassword, setOperatorPassword] = useState('');
 
   // Carregar dados do banco de dados
   useEffect(() => {
@@ -674,7 +677,8 @@ function App() {
         if (machine) {
           // Login bem-sucedido - define o estado como autenticado
           setIsAuthenticated(true);
-          // Não precisamos restaurar o botão aqui, pois a tela de login será substituída pela tela principal
+          setAuthenticatedMachine(machine); // Salva a máquina autenticada
+          setActiveTab('projects'); // Ir direto para a página de projetos
         } else {
           // Login falhou - restaura o botão e mostra mensagem
           alert('Código de máquina ou senha inválidos');
@@ -699,8 +703,15 @@ function App() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setAuthenticatedMachine(null);
     setMachineId('');
     setPassword('');
+    setActiveTab('projects'); // Volta para a aba padrão
+    setSelectedProgram(null);
+    setSelectedOperation(null);
+    setOperator(null); // Remove operador/admin
+    setOperatorLoginModal(false);
+    setExpandedOperations([]);
   };
 
   const handleOperationCheck = (operationId: number | undefined) => {
@@ -987,6 +998,40 @@ function App() {
     alert(`Logs exportados com sucesso para o arquivo "${fileName}"`);
   };
 
+  // Função de login de operador/admin
+  const handleOperatorLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Tentando login de operador:', { operatorCode, operatorPassword: '***' });
+    
+    try {
+      const op = await authenticateOperator(operatorCode, operatorPassword);
+      if (op) {
+        console.log('Login de operador bem-sucedido:', op.name, 'Role:', op.role);
+        setOperator(op);
+        setOperatorLoginModal(false);
+        setOperatorCode('');
+        setOperatorPassword('');
+        
+        // Se o operador tem role admin, permitir acesso à aba de administração
+        if (op.role === 'admin') {
+          setActiveTab('admin');
+          setSelectedProgram(null);
+          setSelectedOperation(null);
+        }
+      } else {
+        console.log('Login de operador falhou');
+        alert('Usuário ou senha inválidos!');
+      }
+    } catch (error) {
+      console.error('Erro no login de operador:', error);
+      alert('Erro ao fazer login. Tente novamente.');
+    }
+  };
+
+  const handleOperatorLogout = () => {
+    setOperator(null);
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="login-background">
@@ -1094,9 +1139,13 @@ function App() {
               {/* Left - Logo */}
               <button
                 onClick={() => {
-                  setActiveTab('dashboard');
-                  setSelectedProgram(null);
-                  setSelectedOperation(null);
+                  if (operator?.role === 'admin') {
+                    setActiveTab('dashboard');
+                    setSelectedProgram(null);
+                    setSelectedOperation(null);
+                  } else {
+                    setOperatorLoginModal(true);
+                  }
                 }}
                 className="hover:opacity-80 transition-opacity"
               >
@@ -1145,8 +1194,28 @@ function App() {
             <select 
               value={activeTab}
               onChange={(e) => {
-                setActiveTab(e.target.value);
-                setSelectedProgram(null);
+                if (e.target.value === 'dashboard') {
+                  if (operator?.role === 'admin') {
+                    setActiveTab('dashboard');
+                    setSelectedProgram(null);
+                  } else {
+                    setOperatorLoginModal(true);
+                    // Não troca a aba
+                    return;
+                  }
+                } else if (e.target.value === 'admin') {
+                  if (operator?.role === 'admin') {
+                    setActiveTab('admin');
+                    setSelectedProgram(null);
+                  } else {
+                    setOperatorLoginModal(true);
+                    // Não troca a aba
+                    return;
+                  }
+                } else {
+                  setActiveTab(e.target.value);
+                  setSelectedProgram(null);
+                }
               }}
               className="w-full p-2 rounded-lg border border-gray-300 text-sm"
             >
@@ -1182,9 +1251,14 @@ function App() {
                 <div className="space-y-1">
                   <button
                     onClick={() => {
-                      setActiveTab('dashboard');
-                      setSelectedProgram(null);
-                      setSelectedOperation(null);
+                      if (operator?.role === 'admin') {
+                        setActiveTab('dashboard');
+                        setSelectedProgram(null);
+                        setSelectedOperation(null);
+                      } else {
+                        setOperatorLoginModal(true);
+                        // Não troca a aba ainda
+                      }
                     }}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                       activeTab === 'dashboard'
@@ -1229,9 +1303,14 @@ function App() {
                   {/* Botão de Administração adicionado */}
                   <button
                     onClick={() => {
-                      setActiveTab('admin');
-                      setSelectedProgram(null);
-                      setSelectedOperation(null);
+                      if (operator?.role === 'admin') {
+                        setActiveTab('admin');
+                        setSelectedProgram(null);
+                        setSelectedOperation(null);
+                      } else {
+                        setOperatorLoginModal(true);
+                        // Não troca a aba ainda
+                      }
                     }}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                       activeTab === 'admin'
@@ -2250,12 +2329,91 @@ function App() {
             )}
             
             {/* Adicionando a renderização do painel de administração */}
-            {activeTab === 'admin' && (
+            {activeTab === 'admin' && operator?.role === 'admin' && (
               <AdminPanel />
             )}
           </main>
         </div>
       </div>
+
+      {/* Botão para abrir modal de login de operador/admin */}
+      {!operator && (
+        <button onClick={() => setOperatorLoginModal(true)} className="ml-2 px-3 py-1 bg-blue-600 text-white rounded">Login Admin/Operador</button>
+      )}
+      {operator && (
+        <span className="ml-2 text-green-700 font-bold">{operator.name} ({operator.role}) <button onClick={handleOperatorLogout} className="ml-2 text-red-600">Sair</button></span>
+      )}
+
+      {/* Modal de login de operador/admin */}
+      {operatorLoginModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Acesso Administrativo</h2>
+              <p className="text-gray-600">Faça login como operador/admin para acessar esta área</p>
+            </div>
+            
+            <form onSubmit={handleOperatorLogin} className="space-y-4">
+              <div>
+                <label htmlFor="operatorCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  Código do Operador
+                </label>
+                <input 
+                  type="text" 
+                  id="operatorCode"
+                  value={operatorCode} 
+                  onChange={e => setOperatorCode(e.target.value)} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Digite seu código"
+                  required
+                  autoFocus 
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="operatorPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Senha
+                </label>
+                <input 
+                  type="password" 
+                  id="operatorPassword"
+                  value={operatorPassword} 
+                  onChange={e => setOperatorPassword(e.target.value)} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Digite sua senha"
+                  required
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button 
+                  type="submit" 
+                  className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                >
+                  Entrar
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setOperatorLoginModal(false)} 
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+            
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h3 className="text-sm font-medium text-blue-900 mb-2">Credenciais de Teste:</h3>
+              <div className="text-xs text-blue-700 space-y-1">
+                <p><strong>Admin:</strong> admin / admin123</p>
+                <p><strong>Luiz:</strong> luiz / luiz123</p>
+                <p><strong>Operador:</strong> op1 / op1pass</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

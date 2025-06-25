@@ -1,6 +1,6 @@
 import { X, Search, User, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { searchOperators, Operator } from '../services/operatorService';
+import { getOperators, Operator } from '../services/operatorService';
 
 interface SignOperationModalProps {
   isOpen: boolean;
@@ -21,33 +21,66 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
   
   const [operatorQuery, setOperatorQuery] = useState('');
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null);
-  const [operators, setOperators] = useState<Operator[]>([]);
+  const [allOperators, setAllOperators] = useState<Operator[]>([]);
+  const [filteredOperators, setFilteredOperators] = useState<Operator[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingOperators, setIsLoadingOperators] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Carregar todos os operadores quando o modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      loadAllOperators();
+    }
+  }, [isOpen]);
+
+  const loadAllOperators = async () => {
+    setIsLoadingOperators(true);
+    try {
+      const operators = await getOperators();
+      setAllOperators(operators);
+      setFilteredOperators(operators);
+    } catch (error) {
+      console.error('Erro ao carregar operadores:', error);
+    } finally {
+      setIsLoadingOperators(false);
+    }
+  };
 
   const handleOperatorInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setOperatorQuery(e.target.value);
+    const query = e.target.value;
+    setOperatorQuery(query);
+    
     // Limpa o operador selecionado se o usuário alterar a busca
     if (selectedOperator) {
       setSelectedOperator(null);
     }
+
+    // Filtrar operadores em tempo real
+    if (query.trim()) {
+      const filtered = allOperators.filter(operator =>
+        operator.name.toLowerCase().includes(query.toLowerCase()) ||
+        operator.code.toLowerCase().includes(query.toLowerCase()) ||
+        operator.matricula?.toLowerCase().includes(query.toLowerCase()) ||
+        operator.cargo?.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredOperators(filtered);
+    } else {
+      setFilteredOperators(allOperators);
+    }
   };
 
-  useEffect(() => {
-    if (operatorQuery.trim() && !selectedOperator) {
-      const timer = setTimeout(() => {
-        searchOperators(operatorQuery).then(results => {
-          setOperators(results);
-          setIsDropdownOpen(results.length > 0);
-        });
-      }, 300); // Debounce para evitar muitas requisições
-      return () => clearTimeout(timer);
-    } else {
-      setOperators([]);
-      setIsDropdownOpen(false);
-    }
-  }, [operatorQuery, selectedOperator]);
+  const handleInputFocus = () => {
+    setIsDropdownOpen(true);
+    setFilteredOperators(allOperators);
+  };
+
+  const handleInputClick = () => {
+    setIsDropdownOpen(true);
+    setFilteredOperators(allOperators);
+  };
 
   // Fechar dropdown quando clicar fora
   useEffect(() => {
@@ -113,46 +146,129 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)'
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(4px)'
           }}
         >
           <div 
             style={{
               backgroundColor: 'white',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
-              padding: '24px',
+              borderRadius: '16px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              padding: '32px',
               width: '90%',
-              maxWidth: '400px',
-              position: 'relative'
+              maxWidth: '500px',
+              position: 'relative',
+              border: '1px solid #e5e7eb'
             }}
           >
-            <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>Assinar Operação</h2>
-            <p style={{ color: '#666', marginBottom: '16px' }}>Modal de teste - isOpen: {String(isOpen)}</p>
-            <p style={{ color: '#666', marginBottom: '16px' }}>Modal funcionando!</p>
-            <p style={{ color: 'green', marginBottom: '16px', fontWeight: 'bold' }}>✅ MODAL VISÍVEL!</p>
+            {/* Header */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              marginBottom: '24px',
+              paddingBottom: '16px',
+              borderBottom: '2px solid #f3f4f6'
+            }}>
+              <div>
+                <h2 style={{ 
+                  fontSize: '24px', 
+                  fontWeight: '700', 
+                  color: '#111827',
+                  margin: 0
+                }}>
+                  Assinar Operação
+                </h2>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#6b7280', 
+                  margin: '4px 0 0 0'
+                }}>
+                  Preencha os dados para finalizar a operação
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#ef4444';
+                  e.currentTarget.style.backgroundColor = '#fef2f2';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                ×
+              </button>
+            </div>
             
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Campo de busca de operador */}
               <div style={{ position: 'relative' }} ref={dropdownRef}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-                  Operador
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  marginBottom: '8px',
+                  color: '#374151'
+                }}>
+                  Operador *
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input
+                    ref={inputRef}
                     type="text"
                     value={operatorQuery}
                     onChange={handleOperatorInputChange}
+                    onFocus={handleInputFocus}
+                    onMouseDown={handleInputClick}
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '4px',
-                      border: '1px solid #d1d5db',
-                      fontSize: '14px'
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '2px solid #e5e7eb',
+                      fontSize: '14px',
+                      transition: 'all 0.2s',
+                      backgroundColor: '#f9fafb'
                     }}
-                    placeholder="Digite código ou nome"
+                    placeholder="Clique para ver todos os operadores ou digite para filtrar"
                     autoComplete="off"
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#04514B';
+                      e.target.style.backgroundColor = 'white';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#e5e7eb';
+                      e.target.style.backgroundColor = '#f9fafb';
+                      e.target.style.boxShadow = 'none';
+                    }}
                   />
+                  {isLoadingOperators && (
+                    <div style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)'
+                    }}>
+                      <RefreshCw size={18} className="animate-spin" style={{ color: '#04514B' }} />
+                    </div>
+                  )}
                 </div>
                 
                 {/* Dropdown de resultados */}
@@ -160,39 +276,86 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                   <div style={{
                     position: 'absolute',
                     zIndex: 10,
-                    marginTop: '4px',
+                    marginTop: '8px',
                     width: '100%',
                     backgroundColor: 'white',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                    maxHeight: '240px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    maxHeight: '280px',
                     overflow: 'auto'
                   }}>
-                    {operators.map((operator) => (
-                      <div
-                        key={operator._id}
-                        style={{
-                          padding: '8px 16px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid #f3f4f6'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                        onClick={() => handleOperatorSelect(operator)}
-                      >
-                        <div style={{ fontWeight: '500' }}>{operator.code} - {operator.name}</div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{operator.role}</div>
+                    {filteredOperators.length === 0 ? (
+                      <div style={{
+                        padding: '20px 16px',
+                        textAlign: 'center',
+                        color: '#6b7280',
+                        fontSize: '14px'
+                      }}>
+                        {operatorQuery.trim() ? 'Nenhum operador encontrado' : 'Carregando operadores...'}
                       </div>
-                    ))}
+                    ) : (
+                      filteredOperators.map((operator) => (
+                        <div
+                          key={operator._id}
+                          style={{
+                            padding: '16px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f3f4f6',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f8fafc';
+                            e.currentTarget.style.borderLeft = '4px solid #04514B';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'white';
+                            e.currentTarget.style.borderLeft = '4px solid transparent';
+                          }}
+                          onClick={() => handleOperatorSelect(operator)}
+                        >
+                          <div style={{ 
+                            fontWeight: '600', 
+                            fontSize: '15px',
+                            color: '#111827',
+                            marginBottom: '4px'
+                          }}>
+                            {operator.code} - {operator.name}
+                          </div>
+                          <div style={{ 
+                            fontSize: '13px', 
+                            color: '#6b7280',
+                            marginBottom: '2px'
+                          }}>
+                            {operator.matricula && `Matrícula: ${operator.matricula}`}
+                            {operator.cargo && ` • ${operator.cargo}`}
+                            {operator.turno && ` • ${operator.turno}`}
+                          </div>
+                          <div style={{ 
+                            fontSize: '12px', 
+                            color: '#9ca3af',
+                            textTransform: 'capitalize',
+                            fontWeight: '500'
+                          }}>
+                            {operator.role}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-                    Horário Início
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px',
+                    color: '#374151'
+                  }}>
+                    Horário Início *
                   </label>
                   <input
                     type="time"
@@ -200,16 +363,34 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                     required
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '4px',
-                      border: '1px solid #d1d5db',
-                      fontSize: '14px'
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '2px solid #e5e7eb',
+                      fontSize: '14px',
+                      backgroundColor: '#f9fafb',
+                      transition: 'all 0.2s'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#04514B';
+                      e.target.style.backgroundColor = 'white';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#e5e7eb';
+                      e.target.style.backgroundColor = '#f9fafb';
+                      e.target.style.boxShadow = 'none';
                     }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-                    Horário Término
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px',
+                    color: '#374151'
+                  }}>
+                    Horário Término *
                   </label>
                   <input
                     type="time"
@@ -217,18 +398,36 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                     required
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '4px',
-                      border: '1px solid #d1d5db',
-                      fontSize: '14px'
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '2px solid #e5e7eb',
+                      fontSize: '14px',
+                      backgroundColor: '#f9fafb',
+                      transition: 'all 0.2s'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#04514B';
+                      e.target.style.backgroundColor = 'white';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#e5e7eb';
+                      e.target.style.backgroundColor = '#f9fafb';
+                      e.target.style.boxShadow = 'none';
                     }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
-                  Medição (mm)
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  marginBottom: '8px',
+                  color: '#374151'
+                }}>
+                  Medição (mm) *
                 </label>
                 <input
                   type="text"
@@ -236,17 +435,35 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                   required
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid #d1d5db',
-                    fontSize: '14px'
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '2px solid #e5e7eb',
+                    fontSize: '14px',
+                    backgroundColor: '#f9fafb',
+                    transition: 'all 0.2s'
                   }}
                   placeholder="Ex: 12.45"
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#04514B';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e5e7eb';
+                    e.target.style.backgroundColor = '#f9fafb';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  marginBottom: '8px',
+                  color: '#374151'
+                }}>
                   Observações
                 </label>
                 <textarea
@@ -254,32 +471,59 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                   rows={3}
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid #d1d5db',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '2px solid #e5e7eb',
                     fontSize: '14px',
-                    resize: 'vertical'
+                    backgroundColor: '#f9fafb',
+                    resize: 'vertical',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
                   }}
                   placeholder="Observações adicionais (opcional)"
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#04514B';
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e5e7eb';
+                    e.target.style.backgroundColor = '#f9fafb';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 ></textarea>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px' }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'flex-end', 
+                gap: '12px', 
+                paddingTop: '8px',
+                marginTop: '8px',
+                borderTop: '2px solid #f3f4f6'
+              }}>
                 <button
                   type="button"
                   onClick={onClose}
                   style={{
-                    padding: '8px 16px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
+                    padding: '12px 24px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '12px',
                     backgroundColor: 'white',
                     color: '#374151',
                     fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: 'pointer'
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f9fafb';
+                    e.currentTarget.style.borderColor = '#d1d5db';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'white';
+                    e.currentTarget.style.borderColor = '#e5e7eb';
+                  }}
                 >
                   Cancelar
                 </button>
@@ -287,23 +531,29 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                   type="submit"
                   disabled={!selectedOperator || isSubmitting}
                   style={{
-                    padding: '8px 16px',
+                    padding: '12px 24px',
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: '12px',
                     backgroundColor: selectedOperator && !isSubmitting ? '#04514B' : '#9ca3af',
                     color: 'white',
                     fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: selectedOperator && !isSubmitting ? 'pointer' : 'not-allowed'
+                    fontWeight: '600',
+                    cursor: selectedOperator && !isSubmitting ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s',
+                    boxShadow: selectedOperator && !isSubmitting ? '0 4px 6px -1px rgba(4, 81, 75, 0.2)' : 'none'
                   }}
                   onMouseEnter={(e) => {
                     if (selectedOperator && !isSubmitting) {
                       e.currentTarget.style.backgroundColor = '#033b36';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 6px 8px -1px rgba(4, 81, 75, 0.3)';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (selectedOperator && !isSubmitting) {
                       e.currentTarget.style.backgroundColor = '#04514B';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(4, 81, 75, 0.2)';
                     }
                   }}
                 >
@@ -311,42 +561,9 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                 </button>
               </div>
             </form>
-
-            <button
-              onClick={onClose}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                color: '#9ca3af'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.color = '#6b7280'}
-              onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
-            >
-              ×
-            </button>
           </div>
         </div>
       )}
-      
-      {/* Debug info sempre visível */}
-      <div style={{
-        position: 'fixed',
-        top: '10px',
-        left: '10px',
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        color: 'white',
-        padding: '10px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        zIndex: 10000
-      }}>
-        Modal Debug: isOpen = {String(isOpen)}
-      </div>
     </>
   );
 }

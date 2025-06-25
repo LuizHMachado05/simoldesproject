@@ -125,7 +125,7 @@ router.put('/:id', async (req, res) => {
       result = await db.collection('projects').updateOne(
         { projectId: id },
         { $set: { ...req.body, updatedAt: new Date() } }
-      );
+    );
     }
     
     if (result.matchedCount === 0) {

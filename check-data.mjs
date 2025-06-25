@@ -1,42 +1,44 @@
-import fetch from 'node-fetch';
+import { MongoClient } from 'mongodb';
 
 async function checkData() {
+  const client = new MongoClient('mongodb://localhost:27017');
+  
   try {
-    console.log('=== VERIFICANDO DADOS DA API ===');
+    await client.connect();
+    const db = client.db('simoldes');
     
-    // Verificar projetos com operações
-    const response = await fetch('http://localhost:3001/api/projects/with-operations');
-    const projects = await response.json();
+    console.log('=== VERIFICANDO DADOS ===\n');
     
-    console.log(`Projetos retornados: ${projects.length}`);
+    // Verificar projetos
+    console.log('1. PROJETOS:');
+    const projects = await db.collection('projects').find({}).toArray();
+    projects.forEach(project => {
+      console.log(`  - ${project.name} (${project.projectId}) - _id: ${project._id}`);
+    });
     
-    if (projects.length > 0) {
-      const project = projects[0];
-      console.log('\nProjeto:', {
-        _id: project._id,
-        projectId: project.projectId,
-        name: project.name,
-        operationsCount: project.operations?.length || 0
+    console.log('\n2. OPERAÇÕES:');
+    const operations = await db.collection('operations').find({}).toArray();
+    operations.forEach(op => {
+      console.log(`  - Seq: ${op.sequence}, ID: ${op.id}, ProjectId: ${op.projectId}, Type: ${op.type}`);
+    });
+    
+    // Verificar operações de um projeto específico
+    console.log('\n3. OPERAÇÕES DO PROJETO 1671_32:');
+    const project1671 = await db.collection('projects').findOne({ projectId: '1671_32' });
+    if (project1671) {
+      console.log(`Projeto encontrado: ${project1671._id}`);
+      const projectOps = await db.collection('operations').find({ projectId: project1671._id }).toArray();
+      projectOps.forEach(op => {
+        console.log(`  - Seq: ${op.sequence}, ID: ${op.id}, Completed: ${op.completed}`);
       });
-      
-      if (project.operations && project.operations.length > 0) {
-        console.log('\nOperações:');
-        project.operations.forEach((op, index) => {
-          console.log(`  ${index + 1}.`, {
-            _id: op._id,
-            id: op.id,
-            sequence: op.sequence,
-            type: op.type,
-            completed: op.completed
-          });
-        });
-      } else {
-        console.log('❌ Nenhuma operação encontrada no projeto');
-      }
+    } else {
+      console.log('Projeto 1671_32 não encontrado');
     }
     
   } catch (error) {
     console.error('Erro:', error);
+  } finally {
+    await client.close();
   }
 }
 

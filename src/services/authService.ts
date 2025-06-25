@@ -4,6 +4,7 @@ export interface Machine {
   name: string;
   password: string;
   status: 'active' | 'maintenance' | 'inactive';
+  role?: 'admin' | 'operator' | 'supervisor';
   lastLogin?: Date;
   createdAt?: Date;
   updatedAt?: Date;

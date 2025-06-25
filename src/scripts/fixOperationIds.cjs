@@ -1,7 +1,11 @@
-const { connect } = require('../../api/db/mongodb');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../api/.env') });
+const { MongoClient, ObjectId } = require('mongodb');
+
+const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/simoldes';
+const client = new MongoClient(uri);
 
 async function fixOperationIds() {
-  const db = await connect();
+  const db = client.db('simoldes');
   const operations = await db.collection('operations').find({}).toArray();
 
   let updatedCount = 0;
@@ -38,4 +42,7 @@ async function fixOperationIds() {
   process.exit(0);
 }
 
-fixOperationIds(); 
+client.connect().then(fixOperationIds).catch(err => {
+  console.error('Erro ao conectar no MongoDB:', err);
+  process.exit(1);
+}); 
