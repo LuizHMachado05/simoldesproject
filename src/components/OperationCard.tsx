@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, PenTool, Eye } from 'lucide-react';
 import { OperationActions } from './OperationActions';
-import { updateOperation } from '../services/operationService';
+import { updateOperation, signOperation } from '../services/operationService';
+import { getOperators, Operator } from '../services/operatorService';
 
 interface OperationCardProps {
   operation: any;
@@ -10,6 +11,13 @@ interface OperationCardProps {
   onSign: () => void;
   onView: () => void;
   projectId?: string;
+}
+
+function formatDateTime(date: string | Date | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return String(date);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 export const OperationCard: React.FC<OperationCardProps> = ({ operation, expanded, onExpand, onSign, onView, projectId }) => {
@@ -23,6 +31,29 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
   // Estados de loading/sucesso
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [operatorSuggestions, setOperatorSuggestions] = useState<Operator[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (operator.trim().length > 0) {
+      getOperators().then((ops: Operator[]) => {
+        const filtered = ops.filter(op =>
+          (op.name && op.name.toLowerCase().includes(operator.toLowerCase())) ||
+          (op.matricula && op.matricula.toLowerCase().includes(operator.toLowerCase()))
+        );
+        setOperatorSuggestions(filtered);
+        setShowSuggestions(true);
+      });
+    } else {
+      setOperatorSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [operator]);
+
+  const handleOperatorSelect = (op: Operator) => {
+    setOperator(op.matricula ? `${op.matricula} - ${op.name}` : op.name);
+    setShowSuggestions(false);
+  };
 
   // Verifica se houve alteração em algum campo
   const isDirty =
@@ -42,9 +73,9 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
 
     setSaving(true);
     setSuccess(false);
-    
     try {
-      const result = await updateOperation({
+      // Chama signOperation para assinar a operação
+      const result = await signOperation({
         projectId: projectId,
         operationId: operation.id,
         operatorName: operator,
@@ -57,13 +88,20 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
       if (result.success) {
         setSuccess(true);
         setTimeout(() => setSuccess(false), 1200);
-        console.log('Operação atualizada com sucesso:', result.message);
+        // Marca a operação como assinada localmente
+        if (typeof operation === 'object') {
+          operation.completed = true;
+          operation.signedBy = operator;
+          operation.timeRecord = { start: startTime, end: endTime };
+          operation.measurementValue = measurement;
+          operation.inspectionNotes = notes;
+        }
       } else {
-        alert('Erro ao salvar alterações: ' + result.message);
+        alert('Erro ao assinar operação: ' + result.message);
       }
     } catch (error) {
-      console.error('Erro ao salvar alterações:', error);
-      alert('Erro ao salvar alterações. Tente novamente.');
+      console.error('Erro ao assinar operação:', error);
+      alert('Erro ao assinar operação. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -111,72 +149,86 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
           {/* Coluna esquerda: detalhes */}
           <div className="space-y-6" style={{ pointerEvents: 'auto' }}>
             {/* Campos de edição inline para assinatura */}
-            {!operation.completed && (
-              <div className="space-y-4 mb-4">
-                {/* Operador */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Operador</label>
-                  <input
-                    type="text"
-                    value={operator}
-                    onChange={e => setOperator(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Nome do operador"
-                  />
-                </div>
-                {/* Horário Início */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Horário Início</label>
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={e => setStartTime(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                {/* Horário Término */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Horário Término</label>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={e => setEndTime(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                {/* Medição */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Medição (mm)</label>
-                  <input
-                    type="text"
-                    value={measurement}
-                    onChange={e => setMeasurement(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Ex: 12.45"
-                  />
-                </div>
-                {/* Observações */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-                  <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    className="w-full border rounded px-3 py-2"
-                    rows={2}
-                  />
-                </div>
-                {/* Botão único de salvar alterações */}
-                {isDirty && (
-                  <button
-                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
-                    disabled={saving}
-                    onClick={saveAllFields}
-                  >
-                    {saving ? 'Salvando...' : success ? 'Salvo!' : 'Salvar Alterações'}
-                  </button>
+            <div className="space-y-4 mb-4">
+              {/* Operador */}
+              <div style={{ position: 'relative' }}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Operador</label>
+                <input
+                  type="text"
+                  value={operator}
+                  onChange={e => setOperator(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="Nome ou matrícula do operador"
+                  onFocus={() => operator && setShowSuggestions(true)}
+                />
+                {showSuggestions && operatorSuggestions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-auto">
+                    {operatorSuggestions.map((op) => (
+                      <div
+                        key={op._id}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => handleOperatorSelect(op)}
+                      >
+                        <div className="font-medium">{op.matricula ? `${op.matricula} - ` : ''}{op.name}</div>
+                        <div className="text-sm text-gray-500">{op.role}</div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            )}
+              {/* Horário Início */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Horário Início</label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={e => setStartTime(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+              {/* Horário Término */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Horário Término</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={e => setEndTime(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+              {/* Medição */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Medição (mm)</label>
+                <input
+                  type="text"
+                  value={measurement}
+                  onChange={e => setMeasurement(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="Ex: 12.45"
+                />
+              </div>
+              {/* Observações */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                  rows={2}
+                />
+              </div>
+              {/* Botão único de salvar alterações */}
+              {isDirty && (
+                <button
+                  className="mt-2 w-full px-6 py-3 rounded-xl bg-[#04514B] text-white font-bold text-base shadow-lg hover:bg-[#057c6b] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={saving}
+                  onClick={saveAllFields}
+                >
+                  <PenTool className="h-5 w-5" />
+                  {saving ? 'Salvando...' : success ? 'Salvo!' : 'Assinar Operação'}
+                </button>
+              )}
+            </div>
             <div>
               <h4 className="text-sm font-bold text-[#04514B] mb-2">Detalhes</h4>
               <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
@@ -218,8 +270,17 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
                 <h4 className="text-sm font-bold text-[#04514B] mb-2">Detalhes da Conclusão</h4>
                 <dl className="divide-y divide-gray-100">
                   <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Assinado por</dt><dd className="text-gray-900 font-semibold">{operation.signedBy}</dd></div>
-                  <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Data/Hora</dt><dd className="text-gray-900 font-semibold">{operation.timestamp}</dd></div>
-                  {operation.timeRecord && <><div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Início</dt><dd className="text-gray-900 font-semibold">{operation.timeRecord.start}</dd></div><div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Término</dt><dd className="text-gray-900 font-semibold">{operation.timeRecord.end}</dd></div></>}
+                  <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Data/Hora</dt><dd className="text-gray-900 font-semibold">{formatDateTime(operation.timestamp)}</dd></div>
+                  {operation.timeRecord && <>
+                    <div className="grid grid-cols-2 py-1">
+                      <dt className="text-gray-500">Início</dt>
+                      <dd className="text-gray-900 font-semibold">{formatDateTime(operation.timeRecord.start)}</dd>
+                    </div>
+                    <div className="grid grid-cols-2 py-1">
+                      <dt className="text-gray-500">Término</dt>
+                      <dd className="text-gray-900 font-semibold">{formatDateTime(operation.timeRecord.end)}</dd>
+                    </div>
+                  </>}
                   {operation.measurementValue && <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Medição</dt><dd className="text-gray-900 font-semibold">{operation.measurementValue} mm</dd></div>}
                   {operation.inspectionNotes && <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Observações</dt><dd className="text-gray-900 font-semibold">{operation.inspectionNotes}</dd></div>}
                 </dl>

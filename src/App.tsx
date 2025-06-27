@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { OperatorSearchModal } from './components/OperatorSearchModal';
 import { OperationActions } from './components/OperationActions';
-import { SignOperationModal } from './components/SignOperationModal';
 import { authenticateMachine } from './services/authService';
 import { getProjectsWithOperations, getProjectWithOperationsById, finishProject } from './services/projectService';
 import { signOperation } from './services/operationService';
@@ -400,15 +399,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedProgram, setSelectedProgram] = useState<MoldProgram | null>(null);
   const [selectedOperation, setSelectedOperation] = useState<Operation | null>(null);
-  const [signModal, setSignModal] = useState({
-    isOpen: false,
-    operationId: null as number | null,
-  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedOperations, setExpandedOperations] = useState<number[]>([]);
   const [programs, setPrograms] = useState<MoldProgram[]>([]); // Inicializar vazio
   const [isLoading, setIsLoading] = useState(true);
-  const [signingOperationId, setSigningOperationId] = useState<number | undefined>(undefined);
   // Adicionar estado para guardar dados da máquina autenticada
   const [authenticatedMachine, setAuthenticatedMachine] = useState<Machine | null>(null);
   const [operator, setOperator] = useState<Operator | null>(null);
@@ -417,6 +411,12 @@ function App() {
   const [operatorPassword, setOperatorPassword] = useState('');
   // Adicionar estado para o filtro de status
   const [historyStatus, setHistoryStatus] = useState<string>('all');
+  // 1. Adicione estados locais para os campos de assinatura na visualização detalhada da operação
+  const [signOperator, setSignOperator] = useState('');
+  const [signStartTime, setSignStartTime] = useState('');
+  const [signEndTime, setSignEndTime] = useState('');
+  const [signMeasurement, setSignMeasurement] = useState('');
+  const [signNotes, setSignNotes] = useState('');
 
   // Carregar dados do banco de dados
   useEffect(() => {
@@ -746,7 +746,6 @@ function App() {
 
   const handleOperationCheck = (operationId: number | undefined) => {
     console.log('[DEBUG] handleOperationCheck chamado para operationId:', operationId);
-    console.log('[DEBUG] signingOperationId antes:', signingOperationId);
     
     // Verificar se o operationId é válido
     if (operationId === undefined || operationId === null) {
@@ -754,18 +753,16 @@ function App() {
       return;
     }
     
-    setSigningOperationId(operationId);
     console.log('[DEBUG] Modal deve abrir agora com operationId:', operationId);
   };
 
   const handleSignConfirm = async (data: { operatorName: string; startTime: string; endTime: string; measurement: string; notes?: string; }) => {
-    if (!signingOperationId || !selectedProgram) return;
+    if (!selectedProgram) return;
     await signOperation({
       projectId: String(selectedProgram.projectId || selectedProgram.id),
-      operationId: signingOperationId,
+      operationId: selectedOperation?.id || 0,
       ...data
     });
-    setSigningOperationId(undefined);
     await handleRefreshSelectedProject();
   };
 
@@ -1882,12 +1879,7 @@ function App() {
                                   projectId={selectedProgram.projectId || selectedProgram.id}
                                 />
                               ))}
-                                              </div>
-                            <SignOperationModal
-                              isOpen={signingOperationId !== undefined}
-                              onClose={() => setSigningOperationId(undefined)}
-                              onConfirm={handleSignConfirm}
-                            />
+                            </div>
                           </section>
                         )}
 

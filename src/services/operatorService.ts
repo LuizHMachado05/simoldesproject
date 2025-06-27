@@ -6,6 +6,9 @@ export interface Operator {
   active: boolean;
   createdAt?: Date;
   updatedAt?: Date;
+  matricula?: string;
+  cargo?: string;
+  turno?: string;
 }
 
 export interface OperatorAuthResponse {
