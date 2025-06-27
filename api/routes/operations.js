@@ -52,6 +52,190 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Atualizar campos de uma operação (sem marcar como completada)
+router.post('/update', async (req, res) => {
+  try {
+    const { projectId, operationId, operatorName, startTime, endTime, measurement, notes } = req.body;
+    console.log('[DEBUG] Dados recebidos para atualização:', { 
+      projectId, 
+      operationId, 
+      operatorName, 
+      startTime, 
+      endTime, 
+      measurement 
+    });
+    
+    const db = await connect();
+    
+    // Primeiro, encontrar o projeto para verificar se existe
+    let projectFilter;
+    if (ObjectId.isValid(projectId)) {
+      projectFilter = { _id: new ObjectId(projectId) };
+    } else {
+      projectFilter = { projectId: projectId };
+    }
+    
+    const project = await db.collection('projects').findOne(projectFilter);
+    if (!project) {
+      console.log('[DEBUG] Projeto não encontrado com filtro:', projectFilter);
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
+    
+    console.log('[DEBUG] Projeto encontrado:', project._id, 'ProjectId:', project.projectId);
+    
+    // Buscar a operação usando diferentes critérios
+    let operationFilter;
+    
+    // Tentar primeiro por ID numérico
+    if (typeof operationId === 'number') {
+      operationFilter = { 
+        projectId: project._id,
+        id: operationId 
+      };
+    } else {
+      // Tentar por sequence (string)
+      operationFilter = { 
+        projectId: project._id,
+        sequence: String(operationId) 
+      };
+    }
+    
+    console.log('[DEBUG] Buscando operação com filtro:', operationFilter);
+    
+    // Primeiro, vamos ver quais operações existem para este projeto
+    const allOperations = await db.collection('operations').find({ projectId: project._id }).toArray();
+    console.log('[DEBUG] Operações encontradas para o projeto:', allOperations.length);
+    allOperations.forEach(op => {
+      console.log('[DEBUG] Operação:', { id: op.id, sequence: op.sequence, _id: op._id });
+    });
+    
+    // Tentar encontrar a operação específica
+    let operation = await db.collection('operations').findOne(operationFilter);
+    
+    // Se não encontrou, tentar outras abordagens
+    if (!operation) {
+      console.log('[DEBUG] Operação não encontrada com filtro inicial, tentando alternativas...');
+      
+      // Tentar por _id se operationId for um ObjectId válido
+      if (ObjectId.isValid(operationId)) {
+        operationFilter = { _id: new ObjectId(operationId) };
+        operation = await db.collection('operations').findOne(operationFilter);
+        console.log('[DEBUG] Tentativa por _id:', operationFilter, 'Resultado:', !!operation);
+      }
+      
+      // Se ainda não encontrou, tentar por qualquer campo que contenha o operationId
+      if (!operation) {
+        operationFilter = { 
+          projectId: project._id,
+          $or: [
+            { id: operationId },
+            { sequence: String(operationId) },
+            { sequence: operationId }
+          ]
+        };
+        operation = await db.collection('operations').findOne(operationFilter);
+        console.log('[DEBUG] Tentativa por $or:', operationFilter, 'Resultado:', !!operation);
+      }
+    }
+    
+    if (!operation) {
+      console.log('[DEBUG] Operação não encontrada após todas as tentativas');
+      return res.status(404).json({ 
+        error: 'Operação não encontrada no projeto',
+        debug: {
+          projectId: project._id,
+          operationId: operationId,
+          availableOperations: allOperations.map(op => ({ id: op.id, sequence: op.sequence }))
+        }
+      });
+    }
+    
+    console.log('[DEBUG] Operação encontrada:', operation._id);
+    
+    // Preparar dados de atualização (sem marcar como completada)
+    const updateData = {
+      updatedAt: new Date()
+    };
+    
+    // Adicionar campos apenas se fornecidos
+    if (operatorName !== undefined) {
+      updateData.signedBy = operatorName;
+    }
+    if (notes !== undefined) {
+      updateData.inspectionNotes = notes;
+    }
+    if (measurement !== undefined) {
+      updateData.measurementValue = measurement;
+    }
+    
+    // Adicionar timeRecord apenas se ambos os horários forem fornecidos
+    if (startTime && endTime) {
+      updateData.timeRecord = {
+        start: startTime,
+        end: endTime
+      };
+    } else if (startTime) {
+      // Se apenas startTime for fornecido, atualizar apenas ele
+      updateData.timeRecord = {
+        ...operation.timeRecord,
+        start: startTime
+      };
+    } else if (endTime) {
+      // Se apenas endTime for fornecido, atualizar apenas ele
+      updateData.timeRecord = {
+        ...operation.timeRecord,
+        end: endTime
+      };
+    }
+    
+    console.log('[DEBUG] Dados de atualização:', updateData);
+    
+    const result = await db.collection('operations').updateOne(
+      { _id: operation._id },
+      { $set: updateData }
+    );
+    
+    console.log('[DEBUG] Resultado do update:', result);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Operação não encontrada para atualização' });
+    }
+    
+    // Criar log da operação
+    try {
+      await db.collection('operationLogs').insertOne({
+        projectId: project._id,
+        operationId: operation._id,
+        operatorName: operatorName || operation.signedBy,
+        startTime: startTime,
+        endTime: endTime,
+        measurement: measurement,
+        notes: notes,
+        timestamp: new Date(),
+        action: 'update'
+      });
+      console.log('[DEBUG] Log de operação criado com sucesso');
+    } catch (logError) {
+      console.error('[DEBUG] Erro ao criar log:', logError);
+      // Não falhar se o log não puder ser criado
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Operação atualizada com sucesso',
+      operationId: operation._id
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar operação:', error);
+    if (error.errInfo) {
+      console.error('Detalhes do erro de validação:', JSON.stringify(error.errInfo, null, 2));
+      res.status(500).json({ error: 'Erro interno do servidor', details: error.message, validation: error.errInfo });
+    } else {
+      res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+    }
+  }
+});
+
 // Assinar uma operação
 router.post('/sign', async (req, res) => {
   try {

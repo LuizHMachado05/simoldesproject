@@ -162,4 +162,101 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Finalizar um projeto
+router.post('/finish', async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    console.log('[DEBUG] Finalizando projeto:', projectId);
+    
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId é obrigatório' });
+    }
+    
+    const db = await connect();
+    
+    // Buscar o projeto
+    let projectFilter;
+    if (ObjectId.isValid(projectId)) {
+      projectFilter = { _id: new ObjectId(projectId) };
+    } else {
+      projectFilter = { projectId: projectId };
+    }
+    
+    const project = await db.collection('projects').findOne(projectFilter);
+    if (!project) {
+      console.log('[DEBUG] Projeto não encontrado com filtro:', projectFilter);
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
+    
+    console.log('[DEBUG] Projeto encontrado:', project._id, 'ProjectId:', project.projectId);
+    
+    // Verificar se todas as operações estão completadas
+    const operations = await db.collection('operations').find({ projectId: project._id }).toArray();
+    const incompleteOperations = operations.filter(op => !op.completed);
+    
+    if (incompleteOperations.length > 0) {
+      console.log('[DEBUG] Operações incompletas encontradas:', incompleteOperations.length);
+      return res.status(400).json({ 
+        error: 'Não é possível finalizar o projeto. Existem operações pendentes.',
+        incompleteOperations: incompleteOperations.map(op => ({
+          id: op.id,
+          sequence: op.sequence,
+          type: op.type,
+          function: op.function
+        }))
+      });
+    }
+    
+    // Atualizar o projeto para finalizado
+    const now = new Date();
+    const updateData = {
+      status: 'completed',
+      completedDate: now,
+      updatedAt: now
+    };
+    
+    console.log('[DEBUG] Dados de atualização do projeto:', updateData);
+    
+    const result = await db.collection('projects').updateOne(
+      { _id: project._id },
+      { $set: updateData }
+    );
+    
+    console.log('[DEBUG] Resultado do update do projeto:', result);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Projeto não encontrado para atualização' });
+    }
+    
+    // Criar log da finalização do projeto
+    try {
+      await db.collection('projectLogs').insertOne({
+        projectId: project._id,
+        action: 'finish',
+        timestamp: now,
+        details: {
+          previousStatus: project.status,
+          newStatus: 'completed',
+          totalOperations: operations.length,
+          completedOperations: operations.filter(op => op.completed).length
+        }
+      });
+      console.log('[DEBUG] Log de finalização do projeto criado com sucesso');
+    } catch (logError) {
+      console.error('[DEBUG] Erro ao criar log de finalização:', logError);
+      // Não falhar se o log não puder ser criado
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Projeto finalizado com sucesso',
+      projectId: project._id,
+      completedDate: now
+    });
+  } catch (error) {
+    console.error('Erro ao finalizar projeto:', error);
+    res.status(500).json({ error: 'Erro interno do servidor', details: error.message });
+  }
+});
+
 module.exports = router; 

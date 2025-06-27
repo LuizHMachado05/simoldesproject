@@ -32,7 +32,7 @@ import { OperatorSearchModal } from './components/OperatorSearchModal';
 import { OperationActions } from './components/OperationActions';
 import { SignOperationModal } from './components/SignOperationModal';
 import { authenticateMachine } from './services/authService';
-import { getProjectsWithOperations, getProjectWithOperationsById } from './services/projectService';
+import { getProjectsWithOperations, getProjectWithOperationsById, finishProject } from './services/projectService';
 import { signOperation } from './services/operationService';
 import { createLog } from './services/logService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
@@ -901,29 +901,59 @@ function App() {
     });
   };
 
-  const handleFinishProject = (projectId: string) => {
+  const handleFinishProject = async (projectId: string) => {
     if (!selectedProgram) return;
     
-    const now = new Date();
-    const completedDate = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+    // Verificar se todas as operações estão completadas
+    const incompleteOperations = selectedProgram.operations.filter(op => !op.completed);
+    if (incompleteOperations.length > 0) {
+      const operationList = incompleteOperations.map(op => 
+        `- Operação ${op.sequence}: ${op.type} (${op.function})`
+      ).join('\n');
+      
+      alert(`Não é possível finalizar o projeto. Existem operações pendentes:\n\n${operationList}`);
+      return;
+    }
     
-    // Atualizar o estado local
-    setPrograms((prevPrograms: MoldProgram[]) => 
-      prevPrograms.map(prog => 
-        prog.id === projectId 
-          ? { ...prog, status: 'completed', completedDate } 
-          : prog
-      )
-    );
-    
-    // Atualizar o projeto selecionado
-    setSelectedProgram({
-      ...selectedProgram,
-      status: 'completed',
-      completedDate
-    });
-    
-    alert("Projeto finalizado com sucesso!");
+    try {
+      console.log('Finalizando projeto:', projectId);
+      
+      const result = await finishProject(projectId);
+      
+      if (result.success) {
+        const now = new Date();
+        const completedDate = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+        
+        // Atualizar o estado local
+        setPrograms((prevPrograms: MoldProgram[]) => 
+          prevPrograms.map(prog => 
+            prog.id === projectId 
+              ? { ...prog, status: 'completed', completedDate } 
+              : prog
+          )
+        );
+        
+        // Atualizar o projeto selecionado
+        setSelectedProgram({
+          ...selectedProgram,
+          status: 'completed',
+          completedDate
+        });
+        
+        alert("Projeto finalizado com sucesso!");
+        console.log('Projeto finalizado:', result);
+      } else {
+        alert('Erro ao finalizar projeto: ' + result.message);
+      }
+    } catch (error: any) {
+      console.error('Erro ao finalizar projeto:', error);
+      
+      if (error.message && error.message.includes('operações pendentes')) {
+        alert('Erro: ' + error.message);
+      } else {
+        alert('Erro ao finalizar projeto. Tente novamente.');
+      }
+    }
   };
 
   const handleExportLogs = (projectId: string) => {
@@ -1676,13 +1706,13 @@ function App() {
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-gray-500">Status:</span>
                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                  program.operations.every(op => op.completed)
+                                  program.status === 'completed'
                                     ? 'bg-green-100 text-green-800'
                                     : 'bg-yellow-100 text-yellow-800'
                                 }`}>
-                                  {program.operations.every(op => op.completed) 
+                                  {program.status === 'completed'
                                     ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
-                                    : <><Lock className="h-3 w-3 mr-1" />Em andamento</>
+                                    : <><AlertTriangle className="h-3 w-3 mr-1" />Em andamento</>
                                   }
                                 </span>
                               </div>
@@ -1845,6 +1875,7 @@ function App() {
                                     handleOperationCheck(operation.id || index); 
                                   }}
                                   onView={() => setSelectedOperation(operation)}
+                                  projectId={selectedProgram.projectId || selectedProgram.id}
                                 />
                               ))}
                                               </div>
@@ -2057,11 +2088,11 @@ function App() {
                                 <div className="flex justify-between items-center">
                                   <span className="text-sm text-gray-500">Status:</span>
                                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                    program.operations.every(op => op.completed)
+                                    program.status === 'completed'
                                       ? 'bg-green-100 text-green-800'
                                       : 'bg-yellow-100 text-yellow-800'
                                   }`}>
-                                    {program.operations.every(op => op.completed) 
+                                    {program.status === 'completed'
                                       ? <><CheckCircle2 className="h-3 w-3 mr-1" />Concluído</>
                                       : <><AlertTriangle className="h-3 w-3 mr-1" />Em andamento</>
                                     }
@@ -2181,6 +2212,7 @@ function App() {
                               onExpand={() => toggleOperationExpand(operation.id || index)}
                               onSign={() => {}}
                               onView={() => setSelectedOperation(operation)}
+                              projectId={selectedProgram.projectId || selectedProgram.id}
                             />
                           ))}
                         </div>

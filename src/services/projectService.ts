@@ -84,4 +84,27 @@ export async function deleteProject(id: string): Promise<void> {
 export async function getProjectWithOperationsById(projectId: string): Promise<Project> {
   const res = await fetch(`http://localhost:3001/api/projects/with-operations/${projectId}`);
   return await res.json();
+}
+
+export async function finishProject(projectId: string): Promise<{ success: boolean; message: string; completedDate: Date }> {
+  try {
+    const response = await fetch('http://localhost:3001/api/projects/finish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ projectId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Erro ao finalizar projeto:', error);
+    throw error;
+  }
 } 

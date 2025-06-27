@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, PenTool, Eye } from 'lucide-react';
 import { OperationActions } from './OperationActions';
+import { updateOperation } from '../services/operationService';
 
 interface OperationCardProps {
   operation: any;
@@ -8,10 +9,66 @@ interface OperationCardProps {
   onExpand: () => void;
   onSign: () => void;
   onView: () => void;
+  projectId?: string;
 }
 
-export const OperationCard: React.FC<OperationCardProps> = ({ operation, expanded, onExpand, onSign, onView }) => {
+export const OperationCard: React.FC<OperationCardProps> = ({ operation, expanded, onExpand, onSign, onView, projectId }) => {
   const mainColor = '#04514B';
+  // Estados locais para edição dos campos
+  const [operator, setOperator] = useState(operation.signedBy || '');
+  const [startTime, setStartTime] = useState(operation.timeRecord?.start || '');
+  const [endTime, setEndTime] = useState(operation.timeRecord?.end || '');
+  const [measurement, setMeasurement] = useState(operation.measurementValue || '');
+  const [notes, setNotes] = useState(operation.inspectionNotes || '');
+  // Estados de loading/sucesso
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  // Verifica se houve alteração em algum campo
+  const isDirty =
+    operator !== (operation.signedBy || '') ||
+    startTime !== (operation.timeRecord?.start || '') ||
+    endTime !== (operation.timeRecord?.end || '') ||
+    measurement !== (operation.measurementValue || '') ||
+    notes !== (operation.inspectionNotes || '');
+
+  // Função real para salvar todos os campos
+  const saveAllFields = async () => {
+    if (!projectId) {
+      console.error('ProjectId não fornecido para atualização da operação');
+      alert('Erro: ID do projeto não encontrado');
+      return;
+    }
+
+    setSaving(true);
+    setSuccess(false);
+    
+    try {
+      const result = await updateOperation({
+        projectId: projectId,
+        operationId: operation.id,
+        operatorName: operator,
+        startTime: startTime,
+        endTime: endTime,
+        measurement: measurement,
+        notes: notes
+      });
+
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 1200);
+        console.log('Operação atualizada com sucesso:', result.message);
+      } else {
+        alert('Erro ao salvar alterações: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar alterações:', error);
+      alert('Erro ao salvar alterações. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div
       className={`relative group rounded-2xl shadow-xl border-0 bg-gradient-to-br from-white via-[#f3f4f6] to-[#e6f4f1] overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-2xl`}
@@ -53,14 +110,73 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
         <div className="px-6 pb-6 pt-2 grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in" style={{ pointerEvents: 'auto' }}>
           {/* Coluna esquerda: detalhes */}
           <div className="space-y-6" style={{ pointerEvents: 'auto' }}>
-            <div>
-              <h4 className="text-sm font-bold text-[#04514B] mb-2">Parâmetros</h4>
-              <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
-                <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Centro</dt><dd className="text-gray-900 font-semibold">{operation.centerPoint}</dd></div>
-                <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">IC</dt><dd className="text-gray-900 font-semibold">{operation.ic}</dd></div>
-                <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">ALT</dt><dd className="text-gray-900 font-semibold">{operation.alt}</dd></div>
-              </dl>
-            </div>
+            {/* Campos de edição inline para assinatura */}
+            {!operation.completed && (
+              <div className="space-y-4 mb-4">
+                {/* Operador */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Operador</label>
+                  <input
+                    type="text"
+                    value={operator}
+                    onChange={e => setOperator(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                    placeholder="Nome do operador"
+                  />
+                </div>
+                {/* Horário Início */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Horário Início</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={e => setStartTime(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+                {/* Horário Término */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Horário Término</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={e => setEndTime(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                  />
+                </div>
+                {/* Medição */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Medição (mm)</label>
+                  <input
+                    type="text"
+                    value={measurement}
+                    onChange={e => setMeasurement(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                    placeholder="Ex: 12.45"
+                  />
+                </div>
+                {/* Observações */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    className="w-full border rounded px-3 py-2"
+                    rows={2}
+                  />
+                </div>
+                {/* Botão único de salvar alterações */}
+                {isDirty && (
+                  <button
+                    className="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50"
+                    disabled={saving}
+                    onClick={saveAllFields}
+                  >
+                    {saving ? 'Salvando...' : success ? 'Salvo!' : 'Salvar Alterações'}
+                  </button>
+                )}
+              </div>
+            )}
             <div>
               <h4 className="text-sm font-bold text-[#04514B] mb-2">Detalhes</h4>
               <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
