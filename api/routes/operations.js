@@ -52,10 +52,38 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Lista dos campos da folha de processo
+const PROCESS_FIELDS = [
+  'Programa',
+  'Tipo Percurso',
+  'Ref.',
+  'Comentário',
+  'Ø RC',
+  'Ferramenta',
+  'Rib.',
+  'Alt.',
+  'Z min',
+  'Lat.2D',
+  'Sob. Esp.',
+  'Passo Lat.',
+  'Passo Vert.',
+  'Tol.',
+  'Rot.',
+  'Av.',
+  'Ângulo',
+  'Plano Trab.',
+  'Tempo Corte',
+  'Tempo Total',
+  'Medição',
+  'Rubrica',
+  'Fresa',
+  'Sup.'
+];
+
 // Atualizar campos de uma operação (sem marcar como completada)
 router.post('/update', async (req, res) => {
   try {
-    const { projectId, operationId, operatorName, startTime, endTime, measurement, notes } = req.body;
+    const { projectId, operationId, operatorName, startTime, endTime, measurement, notes, ...rest } = req.body;
     console.log('[DEBUG] Dados recebidos para atualização:', { 
       projectId, 
       operationId, 
@@ -157,7 +185,7 @@ router.post('/update', async (req, res) => {
       updatedAt: new Date()
     };
     
-    // Adicionar campos apenas se fornecidos
+    // Adicionar campos já existentes
     if (operatorName !== undefined) {
       updateData.signedBy = operatorName;
     }
@@ -175,17 +203,22 @@ router.post('/update', async (req, res) => {
         end: endTime
       };
     } else if (startTime) {
-      // Se apenas startTime for fornecido, atualizar apenas ele
       updateData.timeRecord = {
         ...operation.timeRecord,
         start: startTime
       };
     } else if (endTime) {
-      // Se apenas endTime for fornecido, atualizar apenas ele
       updateData.timeRecord = {
         ...operation.timeRecord,
         end: endTime
       };
+    }
+    
+    // Adicionar campos da folha de processo se enviados
+    for (const field of PROCESS_FIELDS) {
+      if (rest[field] !== undefined) {
+        updateData[field] = rest[field];
+      }
     }
     
     console.log('[DEBUG] Dados de atualização:', updateData);

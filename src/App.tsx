@@ -365,6 +365,34 @@ const historicPrograms: MoldProgram[] = [
   }
 ];
 
+// Definir a constante PROCESS_FIELDS no topo do arquivo (se ainda não existir)
+const PROCESS_FIELDS = [
+  { key: 'Programa', label: 'Programa' },
+  { key: 'Tipo Percurso', label: 'Tipo Percurso' },
+  { key: 'Ref.', label: 'Ref.' },
+  { key: 'Comentário', label: 'Comentário' },
+  { key: 'Ø RC', label: 'Ø RC' },
+  { key: 'Ferramenta', label: 'Ferramenta' },
+  { key: 'Rib.', label: 'Rib.' },
+  { key: 'Alt.', label: 'Alt.' },
+  { key: 'Z min', label: 'Z min' },
+  { key: 'Lat.2D', label: 'Lat.2D' },
+  { key: 'Sob. Esp.', label: 'Sob. Esp.' },
+  { key: 'Passo Lat.', label: 'Passo Lat.' },
+  { key: 'Passo Vert.', label: 'Passo Vert.' },
+  { key: 'Tol.', label: 'Tol.' },
+  { key: 'Rot.', label: 'Rot.' },
+  { key: 'Av.', label: 'Av.' },
+  { key: 'Ângulo', label: 'Ângulo' },
+  { key: 'Plano Trab.', label: 'Plano Trab.' },
+  { key: 'Tempo Corte', label: 'Tempo Corte' },
+  { key: 'Tempo Total', label: 'Tempo Total' },
+  { key: 'Medição', label: 'Medição' },
+  { key: 'Rubrica', label: 'Rubrica' },
+  { key: 'Fresa', label: 'Fresa' },
+  { key: 'Sup.', label: 'Sup.' },
+];
+
 function App() {
   const [machineId, setMachineId] = useState(''); // Alterado de operatorId para machineId
   const [password, setPassword] = useState('');
@@ -1165,55 +1193,31 @@ function App() {
     <>
       <div className="main-layout">
         {/* Header/Topbar */}
-        <header className="bg-primary shadow-lg">
-          <div className="container mx-auto">
-            <div className="flex justify-between items-center h-24 px-6">
-              {/* Left - Logo */}
-              <button
-                onClick={() => {
-                  if (operator?.role === 'admin') {
-                    setActiveTab('dashboard');
-                    setSelectedProgram(null);
-                    setSelectedOperation(null);
-                  } else {
-                    setOperatorLoginModal(true);
-                  }
-                }}
-                className="hover:opacity-80 transition-opacity"
-              >
-                <img
-                  src={IMAGES.logo}
-                  alt="Simoldes Aços Logo"
-                  className="h-12"
-                />
+        <header className="bg-gradient-to-r from-[#04514B] to-[#0d4741] shadow-lg h-20 flex items-center w-full">
+          <div className="w-full flex items-center justify-between h-full relative">
+            {/* Logo totalmente à esquerda */}
+            <div className="flex items-center h-full pl-6">
+              <img src={IMAGES.logo} alt="Simoldes Logo" className="h-12 w-auto" />
+            </div>
+            {/* Título centralizado absoluto */}
+            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full flex justify-center pointer-events-none select-none">
+              <h1 className="text-2xl md:text-3xl font-bold tracking-wide text-white text-center drop-shadow-lg whitespace-nowrap">
+                Sistema de Controle
+              </h1>
+            </div>
+            {/* Ações totalmente à direita */}
+            <div className="flex items-center gap-6 h-full pr-6">
+              <button className="relative p-2 text-white hover:bg-white/10 rounded-full transition-colors">
+                <Bell className="h-6 w-6" />
+                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
               </button>
-
-              {/* Center - Title */}
-              <div className="hidden lg:block absolute left-1/2 transform -translate-x-1/2">
-                <h1 className="text-2xl font-semibold text-white">
-                  Sistema de Controle
-                </h1>
-              </div>
-
-              {/* Right - Actions */}
-              <div className="flex items-center">
-                {/* Notifications */}
-                <button className="relative p-2 text-white hover:bg-white/10 rounded-full transition-colors mx-2">
-                  <Bell className="h-6 w-6" />
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-                </button>
-
-                {/* Settings */}
-                <button className="p-2 text-white hover:bg-white/10 rounded-full transition-colors mx-2">
-                  <Settings className="h-6 w-6" />
-                </button>
-
-                {/* User Info */}
-                <div className="flex items-center ml-6 pl-6 border-l border-white/20">
-                  <div className="mr-4 text-right">
-                    <p className="text-white text-sm font-medium">{machineId}</p>
-                    <p className="text-white/60 text-xs">Máquina</p>
-                  </div>
+              <button className="p-2 text-white hover:bg-white/10 rounded-full transition-colors">
+                <Settings className="h-6 w-6" />
+              </button>
+              <div className="flex items-center pl-4 border-l border-white/20">
+                <div className="text-right">
+                  <p className="text-white text-sm font-medium leading-tight">{machineId}</p>
+                  <p className="text-white/60 text-xs leading-tight">Máquina</p>
                 </div>
               </div>
             </div>
@@ -1884,28 +1888,6 @@ function App() {
                               onClose={() => setSigningOperationId(undefined)}
                               onConfirm={handleSignConfirm}
                             />
-                            
-                            {/* Botão de teste temporário */}
-                            <button
-                              onClick={() => {
-                                console.log('[DEBUG] Botão de teste clicado');
-                                setSigningOperationId(999);
-                              }}
-                              style={{
-                                position: 'fixed',
-                                top: '20px',
-                                right: '20px',
-                                padding: '10px 20px',
-                                backgroundColor: 'red',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                zIndex: 10000
-                              }}
-                            >
-                              Testar Modal
-                            </button>
                           </section>
                         )}
 
@@ -1943,51 +1925,55 @@ function App() {
                   </div>
                 ) : (
                   // Visualização da Operação
-                  <div className="bg-white shadow rounded-lg">
-                    <div className="px-4 py-5 sm:p-6">
-                      <div className="flex items-center space-x-4 mb-6">
+                  <div className="relative group rounded-2xl shadow-xl border-0 bg-gradient-to-br from-white via-[#f3f4f6] to-[#e6f4f1] overflow-hidden transition-transform max-w-5xl mx-auto mt-8 border-l-8" style={{ borderLeftColor: '#22c55e' }}>
+                    <div className="px-6 py-8">
+                      <div className="flex items-center gap-3 mb-6">
                         <button
                           onClick={() => setSelectedOperation(null)}
-                          className="text-gray-500 hover:text-gray-700"
+                          className="text-gray-500 hover:text-gray-700 bg-gray-100 rounded-full p-2 border border-gray-200"
+                          title="Voltar"
                         >
-                          <ArrowLeft className="h-6 w-6" />
+                          <ArrowLeft className="h-5 w-5" />
                         </button>
                         <div>
-                          <h2 className="text-lg font-medium text-gray-900">
-                            Operação {selectedOperation?.sequence} - {selectedOperation?.type}
-                          </h2>
-                          <p className="text-sm text-gray-500">
-                            {selectedOperation?.function}
-                          </p>
+                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                            Operação #{selectedOperation?.sequence}
+                          </span>
+                          <span className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            {selectedOperation?.type} <span className="text-base font-normal text-gray-500">({selectedOperation?.function})</span>
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Ferramenta: <span className="font-semibold text-gray-700">{selectedOperation?.toolRef}</span>
+                          </span>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                            <h3 className="text-sm font-medium text-gray-900 mb-2">
-                              Detalhes da Operação
-                            </h3>
-                            <dl className="grid grid-cols-2 gap-2 text-sm">
-                              <dt className="text-gray-500">Ferramenta:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.toolRef}</dd>
-                              <dt className="text-gray-500">Velocidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.speed}</dd>
-                              <dt className="text-gray-500">Avanço:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.feed}</dd>
-                              <dt className="text-gray-500">Profundidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.depth}</dd>
-                              <dt className="text-gray-500">Tolerância:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.quality.tolerance}</dd>
-                              <dt className="text-gray-500">Acabamento:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.quality.surfaceFinish}</dd>
-                              <dt className="text-gray-500">Operador:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.signedBy}</dd>
-                              <dt className="text-gray-500">Medição:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.measurementValue}mm</dd>
+                          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                            <h3 className="text-sm font-medium text-[#04514B] mb-2">Detalhes da Operação</h3>
+                            <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Ferramenta:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.toolRef}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Velocidade:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.speed}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Avanço:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.feed}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Profundidade:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.depth}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Tolerância:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.quality.tolerance}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Acabamento:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.quality.surfaceFinish}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Operador:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.signedBy}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Medição:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.measurementValue}mm</dd></div>
                             </dl>
                           </div>
-
+                          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                            <h3 className="text-sm font-medium text-[#04514B] mb-2">Folha de Processo</h3>
+                            <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
+                              {PROCESS_FIELDS.map(({ key, label }) => (
+                                <div className="grid grid-cols-2 py-1" key={key}>
+                                  <dt className="text-gray-500">{label}</dt>
+                                  <dd className="text-gray-900 font-semibold">{(selectedOperation as any)?.[key] || '—'}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>                          
                           {selectedOperation?.details.notes && (
                             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
                               <div className="flex">
@@ -2236,52 +2222,56 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  // Visualização detalhada da operação
-                  <div className="bg-white shadow rounded-lg">
-                    <div className="px-4 py-5 sm:p-6">
-                      <div className="flex items-center space-x-4 mb-6">
+                  // Visualização detalhada da operação no histórico
+                  <div className="relative group rounded-2xl shadow-xl border-0 bg-gradient-to-br from-white via-[#f3f4f6] to-[#e6f4f1] overflow-hidden transition-transform max-w-5xl mx-auto mt-8 border-l-8" style={{ borderLeftColor: '#22c55e' }}>
+                    <div className="px-6 py-8">
+                      <div className="flex items-center gap-3 mb-6">
                         <button
                           onClick={() => setSelectedOperation(null)}
-                          className="text-gray-500 hover:text-gray-700"
+                          className="text-gray-500 hover:text-gray-700 bg-gray-100 rounded-full p-2 border border-gray-200"
+                          title="Voltar"
                         >
-                          <ArrowLeft className="h-6 w-6" />
+                          <ArrowLeft className="h-5 w-5" />
                         </button>
                         <div>
-                          <h2 className="text-lg font-medium text-gray-900">
-                            Operação {selectedOperation?.sequence} - {selectedOperation?.type}
-                          </h2>
-                          <p className="text-sm text-gray-500">
-                            {selectedOperation?.function}
-                          </p>
+                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                            Operação #{selectedOperation?.sequence}
+                          </span>
+                          <span className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            {selectedOperation?.type} <span className="text-base font-normal text-gray-500">({selectedOperation?.function})</span>
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Ferramenta: <span className="font-semibold text-gray-700">{selectedOperation?.toolRef}</span>
+                          </span>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                            <h3 className="text-sm font-medium text-gray-900 mb-2">
-                              Detalhes da Operação
-                            </h3>
-                            <dl className="grid grid-cols-2 gap-2 text-sm">
-                              <dt className="text-gray-500">Ferramenta:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.toolRef}</dd>
-                              <dt className="text-gray-500">Velocidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.speed}</dd>
-                              <dt className="text-gray-500">Avanço:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.feed}</dd>
-                              <dt className="text-gray-500">Profundidade:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.details.depth}</dd>
-                              <dt className="text-gray-500">Tolerância:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.quality.tolerance}</dd>
-                              <dt className="text-gray-500">Acabamento:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.quality.surfaceFinish}</dd>
-                              <dt className="text-gray-500">Operador:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.signedBy}</dd>
-                              <dt className="text-gray-500">Medição:</dt>
-                              <dd className="text-gray-900">{selectedOperation?.measurementValue}mm</dd>
+                          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                            <h3 className="text-sm font-medium text-[#04514B] mb-2">Detalhes da Operação</h3>
+                            <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Ferramenta:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.toolRef}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Velocidade:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.speed}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Avanço:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.feed}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Profundidade:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.details.depth}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Tolerância:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.quality.tolerance}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Acabamento:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.quality.surfaceFinish}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Operador:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.signedBy}</dd></div>
+                              <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Medição:</dt><dd className="text-gray-900 font-semibold">{selectedOperation?.measurementValue}mm</dd></div>
                             </dl>
                           </div>
-
+                          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                            <h3 className="text-sm font-medium text-[#04514B] mb-2">Folha de Processo</h3>
+                            <dl className="divide-y divide-gray-100 bg-white/60 rounded-lg p-3 shadow-sm">
+                              {PROCESS_FIELDS.map(({ key, label }) => (
+                                <div className="grid grid-cols-2 py-1" key={key}>
+                                  <dt className="text-gray-500">{label}</dt>
+                                  <dd className="text-gray-900 font-semibold">{(selectedOperation as any)?.[key] || '—'}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>                          
                           {selectedOperation?.details.notes && (
                             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
                               <div className="flex">

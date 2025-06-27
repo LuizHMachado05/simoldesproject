@@ -296,14 +296,14 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                       </div>
                     ) : (
                       filteredOperators.map((operator) => (
-                        <div
-                          key={operator._id}
-                          style={{
+                      <div
+                        key={operator._id}
+                        style={{
                             padding: '16px',
-                            cursor: 'pointer',
+                          cursor: 'pointer',
                             borderBottom: '1px solid #f3f4f6',
                             transition: 'all 0.2s'
-                          }}
+                        }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = '#f8fafc';
                             e.currentTarget.style.borderLeft = '4px solid #04514B';
@@ -312,8 +312,8 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                             e.currentTarget.style.backgroundColor = 'white';
                             e.currentTarget.style.borderLeft = '4px solid transparent';
                           }}
-                          onClick={() => handleOperatorSelect(operator)}
-                        >
+                        onClick={() => handleOperatorSelect(operator)}
+                      >
                           <div style={{ 
                             fontWeight: '600', 
                             fontSize: '15px',
@@ -339,7 +339,7 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                           }}>
                             {operator.role}
                           </div>
-                        </div>
+                      </div>
                       ))
                     )}
                   </div>

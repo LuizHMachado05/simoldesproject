@@ -1,7 +1,7 @@
 export interface Operation {
   id: number;
   sequence: string;
-  type: 'Furação' | 'Fresamento';
+  type: 'Furação' | 'Fresamento' | 'Roscar' | 'Desbaste por Offset';
   function: string;
   centerPoint: string;
   toolRef: string;
@@ -53,5 +53,31 @@ export interface Operation {
   };
   measurementValue?: string;
   imageUrl: string;
+
+  // --- Novos campos da folha de processo ---
+  'Programa': string;
+  'Tipo Percurso': string;
+  'Ref.': string;
+  'Comentário': string;
+  'Ø RC': string;
+  'Ferramenta': string;
+  'Rib.': string;
+  'Alt.': string;
+  'Z min': string;
+  'Lat.2D': string;
+  'Sob. Esp.': string;
+  'Passo Lat.': string;
+  'Passo Vert.': string;
+  'Tol.': string;
+  'Rot.': string;
+  'Av.': string;
+  'Ângulo': string;
+  'Plano Trab.': string;
+  'Tempo Corte': string;
+  'Tempo Total': string;
+  'Medição': string;
+  'Rubrica': string;
+  'Fresa': string;
+  'Sup.': string;
 }
 
