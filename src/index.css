@@ -13,7 +13,7 @@ body {
 
 /* Classe específica para o background da tela de login */
 .login-background {
-  background-image: url('/simoldesproject/tools.png');
+  background-image: url('/acos.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
