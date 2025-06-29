@@ -36,6 +36,7 @@ import { signOperation } from './services/operationService';
 import { createLog } from './services/logService';
 import { AdminPanel } from './components/AdminPanel'; // Importando o componente AdminPanel
 import { OperationCard } from './components/OperationCard';
+import { PasswordSignModal } from './components/PasswordSignModal';
 import type { Machine } from './services/authService';
 import { authenticateOperator, Operator } from './services/operatorService';
 
@@ -423,7 +424,11 @@ function App() {
     const loadPrograms = async () => {
       try {
         setIsLoading(true);
-        const projectsData = await getProjectsWithOperations(machineId);
+        // Usar o machineId da máquina autenticada se disponível
+        const currentMachineId = authenticatedMachine?.machineId || machineId;
+        console.log('[DEBUG] loadPrograms usando machineId:', currentMachineId);
+        
+        const projectsData = await getProjectsWithOperations(currentMachineId);
         
         // Converter dados do banco para o formato MoldProgram
         const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
@@ -465,10 +470,10 @@ function App() {
       }
     };
 
-    if (isAuthenticated && machineId) {
+    if (isAuthenticated && (authenticatedMachine?.machineId || machineId)) {
       loadPrograms();
     }
-  }, [isAuthenticated, machineId]);
+  }, [isAuthenticated, machineId, authenticatedMachine]);
 
   const toggleOperationExpand = (operationId: number | undefined) => {
     if (operationId === undefined) return;
@@ -768,12 +773,30 @@ function App() {
 
   // Função para atualizar o projeto selecionado a partir da API
   const handleRefreshSelectedProject = async () => {
-    if (!selectedProgram) return;
+    if (!selectedProgram) {
+      console.log('[DEBUG] handleRefreshSelectedProject: selectedProgram é null');
+      return;
+    }
+    console.log('[DEBUG] handleRefreshSelectedProject chamado para projeto:', selectedProgram.projectId || selectedProgram.id);
+    console.log('[DEBUG] selectedProgram completo:', selectedProgram);
     setIsRefreshing(true);
     try {
-      const updated = await getProjectWithOperationsById(String(selectedProgram.projectId || selectedProgram.id));
+      const projectId = String(selectedProgram.projectId || selectedProgram.id);
+      console.log('[DEBUG] Chamando API com projectId:', projectId);
+      
+      const updated = await getProjectWithOperationsById(projectId);
+      console.log('[DEBUG] Projeto atualizado recebido da API:', updated);
+      
+      if (!updated) {
+        console.error('[DEBUG] API retornou null/undefined');
+        alert('Erro: Projeto não encontrado na API');
+        return;
+      }
+      
       const safeUpdated = updated as any;
-      setSelectedProgram({
+      console.log('[DEBUG] Convertendo dados do projeto...');
+      
+      const updatedProject = {
         ...safeUpdated,
         programPath: safeUpdated.programPath || '',
         material: safeUpdated.material || '',
@@ -796,25 +819,38 @@ function App() {
           timeRecord: op.timeRecord || undefined,
           measurementValue: op.measurementValue || undefined
         }))
-      });
-      console.log('[DEBUG] Projeto recarregado da API:', updated);
+      };
+      
+      console.log('[DEBUG] Projeto convertido:', updatedProject);
+      setSelectedProgram(updatedProject);
+      console.log('[DEBUG] Estado selectedProgram atualizado');
+      
     } catch (error) {
-      alert('Erro ao atualizar projeto.');
       console.error('Erro ao atualizar projeto:', error);
+      alert('Erro ao atualizar projeto. Verifique o console para mais detalhes.');
     } finally {
       setIsRefreshing(false);
+      console.log('[DEBUG] handleRefreshSelectedProject finalizado');
     }
   };
 
   // Função para atualizar todos os projetos
   const handleRefresh = async (tab: string) => {
     console.log('[DEBUG] handleRefresh chamado com tab:', tab, 'machineId:', machineId);
+    console.log('[DEBUG] Estado atual de programs:', programs.length, 'projetos');
+    console.log('[DEBUG] authenticatedMachine:', authenticatedMachine);
+    
+    // Usar o machineId da máquina autenticada se disponível
+    const currentMachineId = authenticatedMachine?.machineId || machineId;
+    console.log('[DEBUG] Usando machineId:', currentMachineId);
+    
     setIsRefreshing(true);
     try {
-      if (tab === 'dashboard' || tab === 'projects') {
-        console.log('[DEBUG] Buscando projetos da API para máquina:', machineId);
-        const projectsData = await getProjectsWithOperations(machineId);
+      if (tab === 'dashboard' || tab === 'projects' || tab === 'history') {
+        console.log('[DEBUG] Buscando projetos da API para máquina:', currentMachineId);
+        const projectsData = await getProjectsWithOperations(currentMachineId);
         console.log('[DEBUG] Dados recebidos da API:', projectsData.length, 'projetos');
+        console.log('[DEBUG] Primeiro projeto:', projectsData[0]);
         
         const convertedPrograms: MoldProgram[] = projectsData.map(project => ({
           _id: project._id,
@@ -836,11 +872,13 @@ function App() {
         }));
         
         console.log('[DEBUG] Projetos convertidos:', convertedPrograms.length);
+        console.log('[DEBUG] Primeiro projeto convertido:', convertedPrograms[0]);
         setPrograms(convertedPrograms);
         console.log('[DEBUG] Estado programs atualizado');
       }
     } catch (error) {
       console.error('Erro ao recarregar projetos:', error);
+      alert('Erro ao atualizar dados. Verifique o console para mais detalhes.');
     } finally {
       setIsRefreshing(false);
       console.log('[DEBUG] Refresh finalizado');
@@ -1774,7 +1812,10 @@ function App() {
                         
                         {/* Botão de atualizar */}
                         <button 
-                          onClick={handleRefreshSelectedProject}
+                          onClick={() => {
+                            console.log('[DEBUG] Botão de atualizar clicado dentro do projeto');
+                            handleRefreshSelectedProject();
+                          }}
                           className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-white rounded-lg shadow-sm hover:shadow transition-all"
                         >
                           <RefreshCw className={refreshIconClass} />
@@ -2012,6 +2053,18 @@ function App() {
                       <h2 className="text-2xl font-bold text-gray-900">
                         Histórico de Projetos
                       </h2>
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={() => {
+                            console.log('[DEBUG] Botão de atualizar clicado na página de histórico');
+                            handleRefresh('history');
+                          }} 
+                          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-white rounded-lg shadow-sm hover:shadow transition-all"
+                        >
+                          <RefreshCw className={refreshIconClass} />
+                          <span>Atualizar</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2020,9 +2073,53 @@ function App() {
                         .map((program) => (
                           <div
                             key={program.id}
-                            onClick={() => {
+                            onClick={async () => {
                               setSelectedOperation(null);
-                              setSelectedProgram(program);
+                              console.log('[DEBUG] Selecionando projeto no histórico:', program.projectId || program.id);
+                              
+                              try {
+                                // Buscar o projeto completo da API
+                                const fullProject = await getProjectWithOperationsById(String(program.projectId || program.id));
+                                console.log('[DEBUG] Projeto completo buscado da API:', fullProject);
+                                
+                                if (fullProject) {
+                                  const safeProject = fullProject as any;
+                                  const convertedProject = {
+                                    ...safeProject,
+                                    programPath: safeProject.programPath || '',
+                                    material: safeProject.material || '',
+                                    date: safeProject.date,
+                                    programmer: safeProject.programmer || '',
+                                    blockCenter: safeProject.blockCenter || '',
+                                    reference: safeProject.reference || '',
+                                    observations: safeProject.observations || '',
+                                    imageUrl: safeProject.imageUrl || IMAGES.programCapa,
+                                    status: safeProject.status,
+                                    completedDate: safeProject.completedDate,
+                                    operations: (safeProject.operations || []).map((op: any, index: number) => ({
+                                      ...op,
+                                      id: op.id || index + 1,
+                                      imageUrl: op.imageUrl || IMAGES.operation,
+                                      completed: op.completed || false,
+                                      signedBy: op.signedBy || undefined,
+                                      timestamp: op.timestamp || undefined,
+                                      inspectionNotes: op.inspectionNotes || undefined,
+                                      timeRecord: op.timeRecord || undefined,
+                                      measurementValue: op.measurementValue || undefined
+                                    }))
+                                  };
+                                  
+                                  console.log('[DEBUG] Projeto convertido e definido:', convertedProject);
+                                  setSelectedProgram(convertedProject);
+                                } else {
+                                  console.error('[DEBUG] Projeto não encontrado na API, usando dados locais');
+                                  setSelectedProgram(program);
+                                }
+                              } catch (error) {
+                                console.error('[DEBUG] Erro ao buscar projeto da API:', error);
+                                console.log('[DEBUG] Usando dados locais do projeto');
+                                setSelectedProgram(program);
+                              }
                             }}
                             className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all cursor-pointer border border-transparent hover:border-[#04514B] overflow-hidden"
                           >
@@ -2102,16 +2199,33 @@ function App() {
                   <div className="bg-white shadow rounded-lg">
                     <div className="px-4 py-3 sm:p-4">
                       {/* Cabeçalho com botão voltar */}
-                      <div className="flex items-center space-x-4 mb-4">
-                        <button
-                          onClick={() => setSelectedProgram(null)}
-                          className="text-gray-500 hover:text-gray-700"
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={() => setSelectedProgram(null)}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            <ArrowLeft className="h-5 w-5" />
+                          </button>
+                          <h2 className="text-base font-medium text-gray-900">
+                            FOLHA DE PROCESSOS
+                          </h2>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            console.log('[DEBUG] Botão de atualizar clicado dentro do projeto do histórico');
+                            if (selectedProgram) {
+                              handleRefreshSelectedProject();
+                            } else {
+                              console.error('[DEBUG] selectedProgram é null!');
+                              alert('Erro: Projeto não selecionado');
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 bg-white rounded-lg shadow-sm hover:shadow transition-all"
                         >
-                          <ArrowLeft className="h-5 w-5" />
+                          <RefreshCw className={refreshIconClass} />
+                          <span>Atualizar</span>
                         </button>
-                        <h2 className="text-base font-medium text-gray-900">
-                          FOLHA DE PROCESSOS
-                        </h2>
                       </div>
 
                       {/* Nova estrutura com grid */}

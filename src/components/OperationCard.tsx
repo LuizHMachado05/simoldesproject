@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, PenTool, Eye } from 'lucide-react';
 import { OperationActions } from './OperationActions';
 import { updateOperation, signOperation } from '../services/operationService';
-import { getOperators, Operator } from '../services/operatorService';
+import { getOperators, Operator, authenticateOperator } from '../services/operatorService';
+import { PasswordSignModal } from './PasswordSignModal';
 
 interface OperationCardProps {
   operation: any;
@@ -33,6 +34,9 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
   const [success, setSuccess] = useState(false);
   const [operatorSuggestions, setOperatorSuggestions] = useState<Operator[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Estados para o modal de senha
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     if (operator.trim().length > 0) {
@@ -71,12 +75,25 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
       return;
     }
 
+    // Verificar se todos os campos obrigatórios estão preenchidos
+    if (!operator.trim() || !startTime || !endTime || !measurement.trim()) {
+      alert('Por favor, preencha todos os campos obrigatórios (operador, horários e medição)');
+      return;
+    }
+
+    // Abrir modal de senha para validação
+    setShowPasswordModal(true);
+  };
+
+  // Função para confirmar assinatura após validação de senha
+  const handlePasswordConfirm = async (authenticatedOperator: Operator) => {
     setSaving(true);
     setSuccess(false);
+    
     try {
       // Chama signOperation para assinar a operação
       const result = await signOperation({
-        projectId: projectId,
+        projectId: projectId!,
         operationId: operation.id,
         operatorName: operator,
         startTime: startTime,
@@ -104,6 +121,7 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
       alert('Erro ao assinar operação. Tente novamente.');
     } finally {
       setSaving(false);
+      setShowPasswordModal(false);
     }
   };
 
@@ -246,22 +264,6 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
                 <div className="grid grid-cols-2 py-1"><dt className="text-gray-500">Acabamento</dt><dd className="text-gray-900 font-semibold">{operation.quality.surfaceFinish}</dd></div>
               </dl>
             </div>
-            {/* Botão de assinar */}
-            {!operation.completed && (
-              <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 10 }}>
-                <button
-                  onClick={() => {
-                    console.log('[DEBUG] Botão de assinatura clicado para operação:', operation.id);
-                    console.log('[DEBUG] operation.completed:', operation.completed);
-                    onSign();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#04514B] text-white font-bold text-base shadow-lg hover:bg-[#057c6b] transition-colors mt-4 cursor-pointer"
-                  style={{ pointerEvents: 'auto' }}
-                >
-                  <PenTool className="h-5 w-5" /> Assinar Operação
-                </button>
-              </div>
-            )}
           </div>
           {/* Coluna direita: status, imagem, detalhes */}
           <div className="space-y-6">
@@ -306,6 +308,22 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Modal de senha para validação */}
+      {showPasswordModal && (
+        <PasswordSignModal
+          isOpen={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+          onConfirm={handlePasswordConfirm}
+          operationData={{
+            operatorName: operator,
+            startTime: startTime,
+            endTime: endTime,
+            measurement: measurement,
+            notes: notes
+          }}
+        />
       )}
     </div>
   );

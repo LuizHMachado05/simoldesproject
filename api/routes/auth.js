@@ -137,10 +137,10 @@ router.post('/operator-login', async (req, res) => {
     
     const db = await connect();
     
-    // Buscar operador pelo code (que é o operatorId) e verificar se está ativo
+    // Buscar operador apenas pela matricula e verificar se está ativo
     const operator = await db.collection('operators').findOne({ 
-      code: operatorId, 
-      active: true 
+      matricula: operatorId,
+      active: true
     });
     
     if (!operator) {
