@@ -42,7 +42,7 @@ import { authenticateOperator, Operator } from './services/operatorService';
 
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
-  loginCapa: `${import.meta.env.BASE_URL}Capa Simoldes.png`,
+  loginCapa: `${import.meta.env.BASE_URL}loginmodal.jpg`,
   programCapa: `${import.meta.env.BASE_URL}2d.png`,
   operation: `${import.meta.env.BASE_URL}2d.png`,
   operation2d: `${import.meta.env.BASE_URL}2d.png`,

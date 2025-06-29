@@ -132,7 +132,7 @@ export function AdminPanel(): ReactElement {
   const [newOperator, setNewOperator] = useState<Partial<Operator>>({
     name: '',
     code: '',
-    role: '',
+    role: undefined,
     active: true
   });
   const [newMachine, setNewMachine] = useState<Partial<Machine>>({
@@ -180,7 +180,7 @@ export function AdminPanel(): ReactElement {
       const projectsData = await getProjectsWithOperations();
       const programsData = projectsData.map(project => ({
         ...project,
-        operations: project.operations || []
+        operations: []
       }));
       setPrograms(programsData);
       setFilteredPrograms(programsData);
@@ -243,7 +243,7 @@ export function AdminPanel(): ReactElement {
           const projectsData = await getProjectsWithOperations();
           const programsData = projectsData.map(project => ({
             ...project,
-            operations: project.operations || []
+            operations: []
           }));
           setPrograms(programsData);
           setFilteredPrograms(programsData);
@@ -345,7 +345,7 @@ export function AdminPanel(): ReactElement {
       });
       await refreshOperators();
       setShowAddModal(null);
-      setNewOperator({ name: '', code: '', role: '', active: true });
+      setNewOperator({ name: '', code: '', role: undefined, active: true });
     } catch (error) {
       alert('Erro ao adicionar operador');
     }
@@ -513,7 +513,7 @@ export function AdminPanel(): ReactElement {
       // Converter Project[] para MoldProgram[] adicionando operations
       const programsData = projectsData.map(project => ({
         ...project,
-        operations: project.operations || [] // Usar operations do projeto se existir
+        operations: [] // Initialize with empty array
       }));
       setPrograms(programsData);
       setFilteredPrograms(programsData);
@@ -1402,8 +1402,14 @@ export function AdminPanel(): ReactElement {
                         Cargo *
                       </label>
                       <select
-                        value={newOperator.role}
-                        onChange={(e) => setNewOperator({ ...newOperator, role: e.target.value })}
+                        value={newOperator.role || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setNewOperator({ 
+                            ...newOperator, 
+                            role: value ? (value as 'operator' | 'admin' | 'supervisor') : undefined 
+                          });
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                       >
                         <option value="">Selecione um cargo</option>
