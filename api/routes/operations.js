@@ -301,17 +301,22 @@ router.post('/sign', async (req, res) => {
     const projectIdStr = project._id.toString();
     console.log('[DEBUG] Projeto encontrado:', project._id, 'ProjectId:', project.projectId);
     
-    // Buscar a operação usando sempre projectId como string
+    // Buscar a operação usando sempre projectId como string OU ObjectId
     let operationFilter;
+    const projectIdObj = new ObjectId(projectIdStr);
     if (typeof operationId === 'number') {
-      operationFilter = { 
-        projectId: projectIdStr,
-        id: operationId 
+      operationFilter = {
+        $or: [
+          { projectId: projectIdStr, id: operationId },
+          { projectId: projectIdObj, id: operationId }
+        ]
       };
     } else {
-      operationFilter = { 
-        projectId: projectIdStr,
-        sequence: String(operationId) 
+      operationFilter = {
+        $or: [
+          { projectId: projectIdStr, sequence: String(operationId) },
+          { projectId: projectIdObj, sequence: String(operationId) }
+        ]
       };
     }
     

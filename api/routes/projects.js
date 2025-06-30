@@ -194,19 +194,6 @@ router.post('/finish', async (req, res) => {
     const operations = await db.collection('operations').find({ projectId: project._id }).toArray();
     const incompleteOperations = operations.filter(op => !op.completed);
     
-    if (incompleteOperations.length > 0) {
-      console.log('[DEBUG] Operações incompletas encontradas:', incompleteOperations.length);
-      return res.status(400).json({ 
-        error: 'Não é possível finalizar o projeto. Existem operações pendentes.',
-        incompleteOperations: incompleteOperations.map(op => ({
-          id: op.id,
-          sequence: op.sequence,
-          type: op.type,
-          function: op.function
-        }))
-      });
-    }
-    
     // Atualizar o projeto para finalizado
     const now = new Date();
     const updateData = {
