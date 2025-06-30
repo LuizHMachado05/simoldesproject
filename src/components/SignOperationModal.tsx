@@ -1,4 +1,3 @@
-import { X, Search, User, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { getOperators, Operator } from '../services/operatorService';
 

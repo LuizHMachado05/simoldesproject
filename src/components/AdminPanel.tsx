@@ -394,19 +394,6 @@ export function AdminPanel(): ReactElement {
     }
   };
 
-  const saveOperator = async (code: string) => {
-    const operator = operators.find(op => op.code === code);
-    if (!operator) return;
-    try {
-      await updateOperator(operator._id, editedOperatorData);
-      await refreshOperators();
-      setEditingOperator(null);
-      setEditedOperatorData({});
-    } catch (error) {
-      alert('Erro ao salvar operador');
-    }
-  };
-
   const deleteOperatorHandler = async (code: string) => {
     const operator = operators.find(op => op.code === code);
     if (!operator) return;
@@ -544,19 +531,6 @@ export function AdminPanel(): ReactElement {
   const cancelEditingProgram = () => {
     setEditingProgram(null);
     setEditedProgramData({});
-  };
-
-  const saveProgram = async (projectId: string) => {
-    const program = programs.find(p => p.projectId === projectId);
-    if (!program) return;
-    try {
-      await updateProject(program._id, editedProgramData);
-      await refreshPrograms();
-      setEditingProgram(null);
-      setEditedProgramData({});
-    } catch (error) {
-      alert('Erro ao salvar projeto');
-    }
   };
 
   const deleteProgramHandler = async (projectId: string) => {
@@ -908,12 +882,6 @@ export function AdminPanel(): ReactElement {
                           <div className="flex justify-end gap-2">
                             {editingOperator === operator.code ? (
                               <>
-                                <button 
-                                  onClick={() => saveOperator(operator.code)}
-                                  className="text-green-600 hover:text-green-900"
-                                >
-                                  <Check className="h-5 w-5" />
-                                </button>
                                 <button 
                                   onClick={() => deleteOperatorHandler(operator.code)}
                                   className="text-red-600 hover:text-red-900"
@@ -1269,68 +1237,6 @@ export function AdminPanel(): ReactElement {
                 <div className="bg-white shadow rounded-lg p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Configurações do Sistema</h3>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome da Empresa
-                      </label>
-                      <input
-                        type="text"
-                        defaultValue="Simoldes Group"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Diretório de Programas
-                      </label>
-                      <input
-                        type="text"
-                        defaultValue="U:/"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Intervalo de Backup (horas)
-                      </label>
-                      <input
-                        type="number"
-                        defaultValue={24}
-                        min={1}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div className="flex items-center">
-                      <input
-                        id="auto-logout"
-                        type="checkbox"
-                        defaultChecked
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                      />
-                      <label htmlFor="auto-logout" className="ml-2 block text-sm text-gray-900">
-                        Logout automático após 30 minutos de inatividade
-                      </label>
-                    </div>
-                  </div>
-                  <div className="mt-6">
-                    <button className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
-                      Salvar Configurações
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Banco de Dados</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status da Conexão
-                      </label>
-                      <div className="flex items-center">
-                        <span className="inline-block h-3 w-3 rounded-full bg-green-500 mr-2"></span>
-                        <span className="text-sm text-gray-700">Conectado</span>
-                      </div>
-                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Nome da Empresa

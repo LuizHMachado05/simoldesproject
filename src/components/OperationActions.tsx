@@ -2,7 +2,6 @@ import React from 'react';
 import { Eye, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface OperationActionsProps {
-  operationId: number;
   completed: boolean;
   onView: (e: React.MouseEvent) => void;
   onSign: (e: React.MouseEvent) => void;
@@ -11,7 +10,6 @@ interface OperationActionsProps {
 }
 
 export function OperationActions({ 
-  operationId, 
   completed, 
   onView, 
   onSign,

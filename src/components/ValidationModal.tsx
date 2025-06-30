@@ -1,9 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Dialog from '@radix-ui/react-dialog';
-import * as Checkbox from '@radix-ui/react-checkbox';
-import { format } from 'date-fns';
-import { CheckIcon } from 'lucide-react';
 import { operationValidationSchema, type OperationValidationData } from '../schemas/validation';
 import { type Operation } from '../types';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, User, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle } from 'lucide-react';
 import { authenticateOperator, Operator } from '../services/operatorService';
 
 interface PasswordSignModalProps {
@@ -24,7 +24,6 @@ export function PasswordSignModal({ isOpen, onClose, onConfirm, operationData }:
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [operatorCode, setOperatorCode] = useState('');
 
   if (!isOpen) return null;
 

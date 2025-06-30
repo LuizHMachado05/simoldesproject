@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, PenTool, Eye } from 'lucide-react';
-import { OperationActions } from './OperationActions';
-import { updateOperation, signOperation } from '../services/operationService';
-import { getOperators, Operator, authenticateOperator } from '../services/operatorService';
+import { getOperators, Operator } from '../services/operatorService';
 import { PasswordSignModal } from './PasswordSignModal';
 
 interface OperationCardProps {
   operation: any;
   expanded: boolean;
   onExpand: () => void;
-  onSign: () => void;
   onView: () => void;
   projectId?: string;
 }
@@ -21,7 +18,7 @@ function formatDateTime(date: string | Date | undefined): string {
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export const OperationCard: React.FC<OperationCardProps> = ({ operation, expanded, onExpand, onSign, onView, projectId }) => {
+export const OperationCard: React.FC<OperationCardProps> = ({ operation, expanded, onExpand, onView, projectId }) => {
   const mainColor = '#04514B';
   // Estados locais para edição dos campos
   const [operator, setOperator] = useState(operation.signedBy || '');
