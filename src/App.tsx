@@ -1955,12 +1955,6 @@ function App() {
                                   operation={operation}
                                   expanded={expandedOperations.includes(operation.id || index)}
                                   onExpand={() => toggleOperationExpand(operation.id || index)}
-                                  onSign={() => { 
-                                    console.log('[DEBUG] onSign do OperationCard', operation.id || index); 
-                                    console.log('[DEBUG] operation.completed:', operation.completed);
-                                    console.log('[DEBUG] selectedProgram:', selectedProgram);
-                                    handleOperationCheck(operation.id || index); 
-                                  }}
                                   onView={() => setSelectedOperation(operation)}
                                   projectId={selectedProgram.projectId || selectedProgram.id}
                                 />
@@ -2347,7 +2341,6 @@ function App() {
                               operation={operation}
                               expanded={expandedOperations.includes(operation.id || index)}
                               onExpand={() => toggleOperationExpand(operation.id || index)}
-                              onSign={() => {}}
                               onView={() => setSelectedOperation(operation)}
                               projectId={selectedProgram.projectId || selectedProgram.id}
                             />
