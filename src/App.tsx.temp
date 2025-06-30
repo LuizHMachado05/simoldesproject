@@ -1,0 +1,196 @@
+import React, { useState } from 'react';
+import { 
+  ClipboardList, 
+  LayoutDashboard, 
+  History, 
+  LogOut, 
+  User, 
+  Settings, 
+  Bell, 
+  Info, 
+  CheckCircle2, 
+  ArrowLeft,
+  Factory,
+  PenTool as Tool,
+  AlertTriangle,
+  Eye,
+  RefreshCw,
+  LogIn,
+  Lock,
+  ArrowUp,
+  Clock,
+  Target,
+  Activity,
+  TrendingUp,
+  Maximize2
+} from 'lucide-react';
+import { SignOperationModal } from './components/SignOperationModal';
+import { OperationActions } from './components/OperationActions';
+import { MongoDBStatus } from './components/MongoDBStatus';
+import { authenticateMachine } from './services/authService';
+
+const IMAGES = {
+  logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
+  loginCapa: `${import.meta.env.BASE_URL}Capa Simoldes.png`,
+  programCapa: `${import.meta.env.BASE_URL}2d.png`,
+  operation: `${import.meta.env.BASE_URL}operation.png`,
+  operation2d: `${import.meta.env.BASE_URL}2d.png`,
+};
+
+interface Machine {
+  id: string;
+  name: string;
+}
+
+// Aqui você manteria todas as suas interfaces existentes
+
+function App() {
+  const [machineId, setMachineId] = useState('');
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedOperation, setSelectedOperation] = useState(null);
+  const [signModal, setSignModal] = useState({
+    isOpen: false,
+    operationId: null,
+  });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Aqui você manteria todas as suas funções existentes, exceto handleLogin
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (machineId.trim() && password.trim()) {
+      try {
+        const machine = await authenticateMachine(machineId, password);
+        
+        if (machine) {
+          setIsAuthenticated(true);
+        } else {
+          alert('Código de máquina ou senha inválidos');
+        }
+      } catch (error) {
+        console.error('Erro ao fazer login:', error);
+        alert('Erro ao conectar ao servidor. Tente novamente.');
+      }
+    }
+  };
+
+  // Aqui você manteria todas as suas outras funções existentes
+
+  if (!isAuthenticated) {
+    return (
+      <div className="login-background">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="bg-white p-0 max-w-5xl w-full flex flex-col md:flex-row overflow-hidden rounded-2xl shadow-2xl">
+            {/* Left side - Login form */}
+            <div className="w-full md:w-1/2 login-overlay p-6 md:p-12 flex flex-col justify-center">
+              <div className="mb-8">
+                <img
+                  src={IMAGES.logo}
+                  alt="Simoldes Logo"
+                  className="h-12 mb-6"
+                />
+                <h1 className="text-3xl font-bold text-white mb-2">Bem-vindo</h1>
+                <p className="text-gray-200 text-sm">
+                  Sistema de Controle de Projetos
+                </p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div>
+                  <label htmlFor="machineId" className="block text-sm font-medium text-white mb-2">
+                    Código da Máquina
+                  </label>
+                  <div className="relative">
+                    <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      id="machineId"
+                      value={machineId}
+                      onChange={(e) => setMachineId(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border-0 focus:ring-2 focus:ring-[#04514B] bg-white text-lg"
+                      placeholder="Digite o código da máquina"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="password"
+                      id="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border-0 focus:ring-2 focus:ring-[#04514B] bg-white text-lg"
+                      placeholder="••••••"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-white mr-2 focus:ring-[#04514B] focus:ring-offset-0 text-[#04514B]"
+                    />
+                    <span className="text-white">Lembrar-me</span>
+                  </label>
+                  <button 
+                    type="button"
+                    onClick={() => alert('Por favor, contate o suporte técnico.')}
+                    className="text-white hover:underline"
+                  >
+                    Esqueci a senha
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 bg-white text-[#04514B] rounded-xl font-medium hover:bg-gray-100 transition-colors text-lg flex items-center justify-center gap-2"
+                >
+                  <LogIn className="h-5 w-5" />
+                  Acessar Sistema
+                </button>
+              </form>
+            </div>
+            
+            {/* Right side - Image */}
+            <div className="hidden md:block md:w-1/2 relative">
+              <img
+                src={IMAGES.loginCapa}
+                alt="Simoldes Manufacturing"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Aqui você manteria todo o resto do seu código existente para o dashboard, projetos, etc.
+  return (
+    // Todo o seu JSX existente para o dashboard e projetos
+    <>
+      <div className="main-layout">
+        {/* Todo o seu conteúdo existente */}
+      </div>
+      <SignOperationModal
+        isOpen={signModal.isOpen}
+        onClose={() => setSignModal({ isOpen: false, operationId: null })}
+        onConfirm={handleSignConfirm}
+      />
+    </>
+  );
+}
+
+export default App;

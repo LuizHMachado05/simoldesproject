@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste React Modal</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 100%;
+            position: relative;
+        }
+        .btn {
+            padding: 10px 20px;
+            background-color: #04514B;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #033b36;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste React Modal</h1>
+    <p>Este é um teste para verificar se o React está funcionando corretamente.</p>
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function TestModal() {
+            const [isOpen, setIsOpen] = useState(false);
+
+            return (
+                <div>
+                    <button 
+                        className="btn" 
+                        onClick={() => {
+                            console.log('Botão clicado, isOpen será:', !isOpen);
+                            setIsOpen(!isOpen);
+                        }}
+                    >
+                        {isOpen ? 'Fechar Modal' : 'Abrir Modal'}
+                    </button>
+                    
+                    {isOpen && (
+                        <div className="modal-overlay">
+                            <div className="modal-content">
+                                <h2>Modal de Teste</h2>
+                                <p>Modal funcionando! isOpen: {String(isOpen)}</p>
+                                <p style={{color: 'green', fontWeight: 'bold'}}>✅ MODAL VISÍVEL!</p>
+                                <button 
+                                    className="btn" 
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div style={{
+                        position: 'fixed',
+                        top: '10px',
+                        right: '10px',
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        color: 'white',
+                        padding: '10px',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                    }}>
+                        Debug: isOpen = {String(isOpen)}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TestModal />, document.getElementById('root'));
+    </script>
+</body>
+</html> 
