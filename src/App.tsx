@@ -39,6 +39,7 @@ import { OperationCard } from './components/OperationCard';
 import { PasswordSignModal } from './components/PasswordSignModal';
 import type { Machine } from './services/authService';
 import { authenticateOperator, Operator } from './services/operatorService';
+import { logActivity, logLogin, logOperation, logError } from './services/logService';
 
 const IMAGES = {
   logo: `${import.meta.env.BASE_URL}simoldeslogo.png`,
@@ -697,42 +698,31 @@ function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Tentando login:', { machineId, password: '***' });
     
-    if (machineId.trim() && password.trim()) {
-      try {
-        // Mostra um feedback visual de que está processando
-        const loginButton = e.currentTarget.querySelector('button[type="submit"]');
-        if (loginButton) {
-          loginButton.innerHTML = '<span class="animate-spin mr-2">⟳</span> Verificando...';
-          loginButton.setAttribute('disabled', 'true');
-        }
+    try {
+      const machine = await authenticateMachine(machineId, password);
+      if (machine) {
+        console.log('Login bem-sucedido para máquina:', machineId);
+        setIsAuthenticated(true);
         
-        const machine = await authenticateMachine(machineId, password);
+        // Log de login bem-sucedido
+        await logLogin(machineId, machineId, true);
+      } else {
+        console.log('Login falhou para máquina:', machineId);
         
-        if (machine) {
-          // Login bem-sucedido - define o estado como autenticado
-          setIsAuthenticated(true);
-          setAuthenticatedMachine(machine); // Salva a máquina autenticada
-          setActiveTab('projects'); // Ir direto para a página de projetos
-        } else {
-          // Login falhou - restaura o botão e mostra mensagem
-          alert('Código de máquina ou senha inválidos');
-          if (loginButton) {
-            loginButton.innerHTML = '<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/></svg> Acessar Sistema';
-            loginButton.removeAttribute('disabled');
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao fazer login:', error);
-        alert('Erro ao processar o login. Tente novamente.');
+        // Log de tentativa de login falhada
+        await logLogin(machineId, machineId, false);
         
-        // Restaura o botão em caso de erro
-        const loginButton = e.currentTarget.querySelector('button[type="submit"]');
-        if (loginButton) {
-          loginButton.innerHTML = '<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/></svg> Acessar Sistema';
-          loginButton.removeAttribute('disabled');
-        }
+        alert('Código de máquina ou senha inválidos!');
       }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      
+      // Log de erro no login
+      await logError(machineId, machineId, `Erro no login: ${error}`);
+      
+      alert('Erro ao fazer login. Tente novamente.');
     }
   };
 
@@ -763,12 +753,40 @@ function App() {
 
   const handleSignConfirm = async (data: { operatorName: string; startTime: string; endTime: string; measurement: string; notes?: string; }) => {
     if (!selectedProgram) return;
-    await signOperation({
-      projectId: String(selectedProgram.projectId || selectedProgram.id),
-      operationId: selectedOperation?.id || 0,
-      ...data
-    });
-    await handleRefreshSelectedProject();
+    
+    try {
+      const result = await signOperation({
+        projectId: String(selectedProgram.projectId || selectedProgram.id),
+        operationId: selectedOperation?.id || 0,
+        operatorName: data.operatorName,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        measurement: data.measurement,
+        notes: data.notes
+      });
+
+      if (result.success) {
+        // Log de operação assinada
+        await logOperation(data.operatorName, machineId, `Operação ${selectedOperation!.sequence} assinada no projeto ${selectedProgram.projectId}`);
+        
+        // Atualizar o projeto selecionado
+        await handleRefreshSelectedProject();
+        
+        alert('Operação assinada com sucesso!');
+      } else {
+        // Log de erro na assinatura
+        await logError(data.operatorName, machineId, `Falha ao assinar operação: ${result.message}`);
+        
+        alert('Erro ao assinar operação: ' + result.message);
+      }
+    } catch (error) {
+      console.error('Erro ao assinar operação:', error);
+      
+      // Log de erro na assinatura
+      await logError(data.operatorName, machineId, `Erro ao assinar operação: ${error}`);
+      
+      alert('Erro ao assinar operação. Tente novamente.');
+    }
   };
 
   // Função para atualizar o projeto selecionado a partir da API
@@ -846,6 +864,10 @@ function App() {
     
     setIsRefreshing(true);
     try {
+      // Log de início da atualização
+      const operatorName = operator?.name || machineId;
+      await logOperation(operatorName, machineId, 'Iniciando atualização de dados');
+      
       if (tab === 'dashboard' || tab === 'projects' || tab === 'history') {
         console.log('[DEBUG] Buscando projetos da API para máquina:', currentMachineId);
         const projectsData = await getProjectsWithOperations(currentMachineId);
@@ -875,9 +897,17 @@ function App() {
         console.log('[DEBUG] Primeiro projeto convertido:', convertedPrograms[0]);
         setPrograms(convertedPrograms);
         console.log('[DEBUG] Estado programs atualizado');
+        
+        // Log de atualização bem-sucedida
+        await logOperation(operatorName, machineId, `Dados atualizados com sucesso - ${convertedPrograms.length} projetos carregados`);
       }
     } catch (error) {
       console.error('Erro ao recarregar projetos:', error);
+      
+      // Log de erro na atualização
+      const operatorName = operator?.name || machineId;
+      await logError(operatorName, machineId, `Erro ao atualizar dados: ${error}`);
+      
       alert('Erro ao atualizar dados. Verifique o console para mais detalhes.');
     } finally {
       setIsRefreshing(false);
@@ -967,23 +997,20 @@ function App() {
   const handleFinishProject = async (projectId: string) => {
     if (!selectedProgram) return;
     
-    // Verificar se todas as operações estão completadas
-    const incompleteOperations = selectedProgram.operations.filter(op => !op.completed);
-    if (incompleteOperations.length > 0) {
-      const operationList = incompleteOperations.map(op => 
-        `- Operação ${op.sequence}: ${op.type} (${op.function})`
-      ).join('\n');
-      
-      alert(`Não é possível finalizar o projeto. Existem operações pendentes:\n\n${operationList}`);
+    if (!window.confirm('Tem certeza que deseja finalizar este projeto? Esta ação não pode ser desfeita.')) {
       return;
     }
-    
+
     try {
       console.log('Finalizando projeto:', projectId);
       
       const result = await finishProject(projectId);
       
       if (result.success) {
+        // Log de projeto finalizado
+        const operatorName = operator?.name || machineId;
+        await logOperation(operatorName, machineId, `Projeto ${projectId} finalizado`);
+        
         const now = new Date();
         const completedDate = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
         
@@ -1006,16 +1033,20 @@ function App() {
         alert("Projeto finalizado com sucesso!");
         console.log('Projeto finalizado:', result);
       } else {
+        // Log de erro ao finalizar projeto
+        const operatorName = operator?.name || machineId;
+        await logError(operatorName, machineId, `Falha ao finalizar projeto ${projectId}: ${result.message}`);
+        
         alert('Erro ao finalizar projeto: ' + result.message);
       }
     } catch (error: any) {
       console.error('Erro ao finalizar projeto:', error);
       
-      if (error.message && error.message.includes('operações pendentes')) {
-        alert('Erro: ' + error.message);
-      } else {
-        alert('Erro ao finalizar projeto. Tente novamente.');
-      }
+      // Log de erro ao finalizar projeto
+      const operatorName = operator?.name || machineId;
+      await logError(operatorName, machineId, `Erro ao finalizar projeto ${projectId}: ${error}`);
+      
+      alert('Erro ao finalizar projeto. Tente novamente.');
     }
   };
 
@@ -1107,18 +1138,32 @@ function App() {
         setOperatorCode('');
         setOperatorPassword('');
         
+        // Log de login de operador bem-sucedido
+        await logLogin(op.name, machineId, true);
+        
         // Se o operador tem role admin, permitir acesso à aba de administração
         if (op.role === 'admin') {
           setActiveTab('admin');
           setSelectedProgram(null);
           setSelectedOperation(null);
+          
+          // Log de acesso ao painel admin
+          await logOperation(op.name, machineId, 'Acesso ao painel administrativo');
         }
       } else {
         console.log('Login de operador falhou');
+        
+        // Log de tentativa de login de operador falhada
+        await logLogin(operatorCode, machineId, false);
+        
         alert('Usuário ou senha inválidos!');
       }
     } catch (error) {
       console.error('Erro no login de operador:', error);
+      
+      // Log de erro no login de operador
+      await logError(operatorCode, machineId, `Erro no login de operador: ${error}`);
+      
       alert('Erro ao fazer login. Tente novamente.');
     }
   };

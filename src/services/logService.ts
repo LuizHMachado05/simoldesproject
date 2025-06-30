@@ -111,8 +111,7 @@ export async function logActivity(
       user,
       machine,
       details,
-      severity,
-      timestamp: new Date()
+      severity
     });
   } catch (error) {
     console.error('Erro ao criar log de atividade:', error);

@@ -25,6 +25,7 @@ import { getOperators, createOperator, updateOperator, deleteOperator, Operator 
 import { getMachines, createMachine, updateMachine, deleteMachine, Machine } from '../services/machineService';
 import { getProjectsWithOperations, createProject, updateProject, deleteProject, Project } from '../services/projectService';
 import { getLogs, createLog, deleteLog, clearOldLogs, Log, LogFilters } from '../services/logService';
+import { logActivity, logOperation, logError } from '../services/logService';
 import machinesData from '../data/machines.json';
 import { ProgramEditModal } from './ProgramEditModal';
 
@@ -224,6 +225,9 @@ export function AdminPanel(): ReactElement {
     setIsLoading(true);
     
     try {
+      // Log de início da atualização
+      await logOperation('Admin', 'Sistema', `Iniciando atualização de dados da aba ${activeTab}`);
+      
       switch (activeTab) {
         case 'users':
           const operatorsData = await getOperators();
@@ -266,10 +270,17 @@ export function AdminPanel(): ReactElement {
       setEditedProgramData({});
       setShowDetailedEditModal(null);
 
+      // Log de atualização bem-sucedida
+      await logOperation('Admin', 'Sistema', `Dados da aba ${activeTab} atualizados com sucesso`);
+
       // Feedback visual de sucesso
       alert('Dados atualizados com sucesso!');
     } catch (error) {
       console.error('Erro ao atualizar dados:', error);
+      
+      // Log de erro na atualização
+      await logError('Admin', 'Sistema', `Erro ao atualizar dados da aba ${activeTab}: ${error}`);
+      
       alert('Erro ao atualizar os dados. Por favor, tente novamente.');
     } finally {
       setIsLoading(false);
@@ -290,9 +301,23 @@ export function AdminPanel(): ReactElement {
   const deleteLogHandler = async (logId: string) => {
     if (window.confirm('Tem certeza que deseja excluir este log?')) {
       try {
+        // Buscar o log antes de deletar para registrar a ação
+        const logToDelete = logs.find(log => log._id === logId);
+        
         await deleteLog(logId);
+        
+        // Log de log deletado
+        if (logToDelete) {
+          await logOperation('Admin', 'Sistema', `Log deletado: ${logToDelete.type} - ${logToDelete.user} - ${logToDelete.details}`);
+        }
+        
         await refreshLogs();
       } catch (error) {
+        console.error('Erro ao remover log:', error);
+        
+        // Log de erro ao deletar log
+        await logError('Admin', 'Sistema', `Erro ao deletar log ${logId}: ${error}`);
+        
         alert('Erro ao remover log');
       }
     }
@@ -303,9 +328,18 @@ export function AdminPanel(): ReactElement {
     if (days) {
       try {
         const result = await clearOldLogs(parseInt(days));
+        
+        // Log de limpeza de logs
+        await logOperation('Admin', 'Sistema', `${result.deletedCount} logs antigos (mais de ${days} dias) foram removidos`);
+        
         alert(`${result.deletedCount} logs antigos foram removidos`);
         await refreshLogs();
       } catch (error) {
+        console.error('Erro ao limpar logs antigos:', error);
+        
+        // Log de erro ao limpar logs
+        await logError('Admin', 'Sistema', `Erro ao limpar logs antigos: ${error}`);
+        
         alert('Erro ao limpar logs antigos');
       }
     }
@@ -343,10 +377,19 @@ export function AdminPanel(): ReactElement {
         role: newOperator.role,
         active: newOperator.active ?? true,
       });
+      
+      // Log de operador criado
+      await logOperation('Admin', 'Sistema', `Operador ${newOperator.name} (${newOperator.code}) criado com role ${newOperator.role}`);
+      
       await refreshOperators();
       setShowAddModal(null);
       setNewOperator({ name: '', code: '', role: undefined, active: true });
     } catch (error) {
+      console.error('Erro ao adicionar operador:', error);
+      
+      // Log de erro ao criar operador
+      await logError('Admin', 'Sistema', `Erro ao criar operador ${newOperator.name}: ${error}`);
+      
       alert('Erro ao adicionar operador');
     }
   };
@@ -370,8 +413,17 @@ export function AdminPanel(): ReactElement {
     if (window.confirm('Tem certeza que deseja excluir este operador?')) {
       try {
         await deleteOperator(operator._id);
+        
+        // Log de operador deletado
+        await logOperation('Admin', 'Sistema', `Operador ${operator.name} (${operator.code}) deletado`);
+        
         await refreshOperators();
       } catch (error) {
+        console.error('Erro ao remover operador:', error);
+        
+        // Log de erro ao deletar operador
+        await logError('Admin', 'Sistema', `Erro ao deletar operador ${operator.name}: ${error}`);
+        
         alert('Erro ao remover operador');
       }
     }
@@ -414,8 +466,17 @@ export function AdminPanel(): ReactElement {
     if (window.confirm('Tem certeza que deseja excluir esta máquina?')) {
       try {
         await deleteMachine(machine._id);
+        
+        // Log de máquina deletada
+        await logOperation('Admin', 'Sistema', `Máquina ${machine.name} (${machine.machineId}) deletada`);
+        
         await refreshMachines();
       } catch (error) {
+        console.error('Erro ao remover máquina:', error);
+        
+        // Log de erro ao deletar máquina
+        await logError('Admin', 'Sistema', `Erro ao deletar máquina ${machine.name}: ${error}`);
+        
         alert('Erro ao remover máquina');
       }
     }
@@ -449,6 +510,10 @@ export function AdminPanel(): ReactElement {
         password: newMachine.password,
         status: newMachine.status || 'active',
       });
+      
+      // Log de máquina criada
+      await logOperation('Admin', 'Sistema', `Máquina ${newMachine.name} (${newMachine.machineId}) criada`);
+      
       await refreshMachines();
       setShowAddModal(null);
       setNewMachine({
@@ -458,6 +523,11 @@ export function AdminPanel(): ReactElement {
         status: 'active'
       });
     } catch (error) {
+      console.error('Erro ao adicionar máquina:', error);
+      
+      // Log de erro ao criar máquina
+      await logError('Admin', 'Sistema', `Erro ao criar máquina ${newMachine.name}: ${error}`);
+      
       alert('Erro ao adicionar máquina');
     }
   };
@@ -495,9 +565,17 @@ export function AdminPanel(): ReactElement {
     if (window.confirm('Tem certeza que deseja excluir este projeto?')) {
       try {
         await deleteProject(program._id);
+        
+        // Log de projeto deletado
+        await logOperation('Admin', 'Sistema', `Projeto ${program.name} (${program.projectId}) deletado`);
+        
         await refreshPrograms();
       } catch (error) {
         console.error('Erro ao remover projeto:', error);
+        
+        // Log de erro ao deletar projeto
+        await logError('Admin', 'Sistema', `Erro ao deletar projeto ${program.name}: ${error}`);
+        
         alert('Erro ao remover projeto');
       }
     }
@@ -544,6 +622,10 @@ export function AdminPanel(): ReactElement {
         imageUrl: newProgram.imageUrl || '/images/program-cover.jpg',
         status: newProgram.status || 'in_progress',
       });
+      
+      // Log de projeto criado
+      await logOperation('Admin', 'Sistema', `Projeto ${newProgram.name} (${newProgram.projectId}) criado para máquina ${newProgram.machine}`);
+      
       await refreshPrograms();
       setShowAddModal(null);
       setNewProgram({
@@ -562,6 +644,10 @@ export function AdminPanel(): ReactElement {
       });
     } catch (error) {
       console.error('Erro ao adicionar projeto:', error);
+      
+      // Log de erro ao criar projeto
+      await logError('Admin', 'Sistema', `Erro ao criar projeto ${newProgram.name}: ${error}`);
+      
       alert('Erro ao adicionar projeto');
     }
   };
@@ -786,7 +872,7 @@ export function AdminPanel(): ReactElement {
                   </button>
                 )}
                 <button 
-                  onClick={handleRefresh}
+                  onClick={() => handleRefresh()}
                   disabled={isLoading}
                   className={`flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg transition-colors ${
                     isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200'

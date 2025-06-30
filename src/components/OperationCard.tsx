@@ -94,7 +94,7 @@ export const OperationCard: React.FC<OperationCardProps> = ({ operation, expande
       // Chama signOperation para assinar a operação
       const result = await signOperation({
         projectId: projectId!,
-        operationId: operation.id,
+        operationId: operation.id !== undefined ? operation.id : operation.sequence,
         operatorName: operator,
         startTime: startTime,
         endTime: endTime,

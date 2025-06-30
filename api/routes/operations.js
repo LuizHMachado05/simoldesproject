@@ -284,7 +284,7 @@ router.post('/sign', async (req, res) => {
     
     const db = await connect();
     
-    // Primeiro, encontrar o projeto para verificar se existe
+    // Buscar o projeto pelo projectId (string) ou _id
     let projectFilter;
     if (ObjectId.isValid(projectId)) {
       projectFilter = { _id: new ObjectId(projectId) };
@@ -298,32 +298,30 @@ router.post('/sign', async (req, res) => {
       return res.status(404).json({ error: 'Projeto não encontrado' });
     }
     
+    const projectIdStr = project._id.toString();
     console.log('[DEBUG] Projeto encontrado:', project._id, 'ProjectId:', project.projectId);
     
-    // Buscar a operação usando diferentes critérios
+    // Buscar a operação usando sempre projectId como string
     let operationFilter;
-    
-    // Tentar primeiro por ID numérico
     if (typeof operationId === 'number') {
       operationFilter = { 
-        projectId: project._id,
+        projectId: projectIdStr,
         id: operationId 
       };
     } else {
-      // Tentar por sequence (string)
       operationFilter = { 
-        projectId: project._id,
+        projectId: projectIdStr,
         sequence: String(operationId) 
       };
     }
     
     console.log('[DEBUG] Buscando operação com filtro:', operationFilter);
     
-    // Primeiro, vamos ver quais operações existem para este projeto
-    const allOperations = await db.collection('operations').find({ projectId: project._id }).toArray();
+    // Buscar todas as operações do projeto
+    const allOperations = await db.collection('operations').find({ projectId: projectIdStr }).toArray();
     console.log('[DEBUG] Operações encontradas para o projeto:', allOperations.length);
     allOperations.forEach(op => {
-      console.log('[DEBUG] Operação:', { id: op.id, sequence: op.sequence, _id: op._id });
+      console.log('[DEBUG] Operação:', { id: op.id, sequence: op.sequence, _id: op._id, projectId: op.projectId });
     });
     
     // Tentar encontrar a operação específica
@@ -332,18 +330,14 @@ router.post('/sign', async (req, res) => {
     // Se não encontrou, tentar outras abordagens
     if (!operation) {
       console.log('[DEBUG] Operação não encontrada com filtro inicial, tentando alternativas...');
-      
-      // Tentar por _id se operationId for um ObjectId válido
       if (ObjectId.isValid(operationId)) {
         operationFilter = { _id: new ObjectId(operationId) };
         operation = await db.collection('operations').findOne(operationFilter);
         console.log('[DEBUG] Tentativa por _id:', operationFilter, 'Resultado:', !!operation);
       }
-      
-      // Se ainda não encontrou, tentar por qualquer campo que contenha o operationId
       if (!operation) {
         operationFilter = { 
-          projectId: project._id,
+          projectId: projectIdStr,
           $or: [
             { id: operationId },
             { sequence: String(operationId) },
@@ -362,7 +356,7 @@ router.post('/sign', async (req, res) => {
         debug: {
           projectId: project._id,
           operationId: operationId,
-          availableOperations: allOperations.map(op => ({ id: op.id, sequence: op.sequence }))
+          availableOperations: allOperations.map(op => ({ id: op.id, sequence: op.sequence, projectId: op.projectId }))
         }
       });
     }
