@@ -20,6 +20,7 @@
     "@radix-ui/react-dialog": "^1.1.14",
     "axios": "^1.6.7",
     "clsx": "^2.1.0",
+    "csv-parse": "^5.6.0",
     "date-fns": "^3.3.1",
     "dotenv": "^16.5.0",
     "form-data": "^4.0.3",

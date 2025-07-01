@@ -113,12 +113,11 @@ async function createOperationsCollection(db) {
       validator: {
         $jsonSchema: {
           bsonType: 'object',
-          required: ['projectId', 'sequence', 'type', 'function'],
           properties: {
             projectId: { bsonType: 'objectId' },
             sequence: { bsonType: 'string' },
             type: { 
-              enum: ['Furação', 'Fresamento'] 
+              bsonType: 'string' 
             },
             function: { bsonType: 'string' },
             centerPoint: { bsonType: 'string' },

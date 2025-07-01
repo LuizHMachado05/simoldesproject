@@ -6,6 +6,9 @@ const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
 const upload = multer({ dest: 'uploads/' });
+const axios = require('axios');
+const FormData = require('form-data');
+const parse = require('csv-parse/sync').parse;
 
 // GET /api/projects
 router.get('/', async (req, res) => {
@@ -267,33 +270,32 @@ router.post('/import-pdf-project', upload.single('file'), async (req, res) => {
     return res.status(500).json({ error: 'Erro ao ler PDF', details: err.message });
   }
 
-  // Função de parsing (copiada/adaptada de pdfToJsonApi.js)
+  // Função de parsing adaptada para PDFs tabulares
   function parsePdfTextToJson(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const projeto = {
       nome: '', material: '', programador: '', tempoProjeto: '', dataImpressao: '', pastaProgramas: '', pastaProjetoPowermill: ''
     };
+    // Extrair metadados do projeto
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (!projeto.nome && lines[i].startsWith('Projecto')) projeto.nome = lines[i].replace(/^Projecto\s*/i, '').replace(':', '').trim();
-      if (!projeto.material && lines[i].startsWith('Material:')) projeto.material = lines[i].replace('Material:', '').trim();
-      if (!projeto.dataImpressao && lines[i].includes('Data:')) projeto.dataImpressao = lines[i].split('Data:')[1].trim();
-      if (!projeto.pastaProgramas && lines[i].startsWith('Pasta dos Programas:')) projeto.pastaProgramas = lines[i].replace('Pasta dos Programas:', '').trim();
-      if (!projeto.pastaProjetoPowermill && lines[i].startsWith('Pasta do Projeto Powermill:')) projeto.pastaProjetoPowermill = lines[i].replace('Pasta do Projeto Powermill:', '').trim();
-      if (!projeto.programador && lines[i].startsWith('Programador:')) {
-        const parts = lines[i].replace('Programador:', '').split('Tempo Projeto:');
+      if (!projeto.nome && lines[i].toLowerCase().includes('projecto')) projeto.nome = lines[i].replace(/^Projecto\s*/i, '').replace(':', '').trim().replace(/sumario/i, '').trim();
+      if (!projeto.material && lines[i].toLowerCase().startsWith('material:')) projeto.material = lines[i].replace(/material:/i, '').trim();
+      if (!projeto.dataImpressao && lines[i].toLowerCase().includes('data:')) projeto.dataImpressao = lines[i].split(/data:/i)[1].trim();
+      if (!projeto.pastaProgramas && lines[i].toLowerCase().startsWith('pasta dos programas:')) projeto.pastaProgramas = lines[i].replace(/pasta dos programas:/i, '').trim();
+      if (!projeto.pastaProjetoPowermill && lines[i].toLowerCase().startsWith('pasta do projeto powermill:')) projeto.pastaProjetoPowermill = lines[i].replace(/pasta do projeto powermill:/i, '').trim();
+      if (!projeto.programador && lines[i].toLowerCase().startsWith('programador:')) {
+        const parts = lines[i].replace(/programador:/i, '').split(/tempo projeto:/i);
         projeto.programador = parts[0].trim();
         projeto.tempoProjeto = (parts[1] || '').trim();
       }
     }
-    // NOVO: Se não encontrou nome do projeto, extrair do final da pasta
     if (!projeto.nome) {
       let pasta = projeto.pastaProgramas || projeto.pastaProjetoPowermill;
       if (pasta) {
-        const partes = pasta.split(/[\\\/]/); // separa por / ou \
+        const partes = pasta.split(/[\\\/]/);
         projeto.nome = partes[partes.length - 1].trim();
       }
     }
-    // NOVO: Inferir máquina do nome do projeto se padrão F1400_, F1600_, etc
     let maquina = '';
     if (projeto.nome) {
       const match = projeto.nome.match(/^(F\d{4})[_-]/i);
@@ -301,26 +303,89 @@ router.post('/import-pdf-project', upload.single('file'), async (req, res) => {
         maquina = match[1];
       }
     }
+    // Parser robusto de operações tabulares
     const operacoes = [];
+    // Lista dos números de operação válidos (01 a 07)
+    const opNumeros = ['01','02','03','04','05','06','07'];
     let i = 0;
     while (i < lines.length) {
-      if (/^\d{2}$/.test(lines[i])) {
+      // Só considera início de operação se for '01' a '07' (ajuste conforme o PDF)
+      if (opNumeros.includes(lines[i])) {
         const numero = lines[i];
-        const tipo = lines[i+1] || '';
-        const observacao = lines[i+2] || '';
-        let parametros = [];
-        let j = i+3;
-        while (j < lines.length && !/^\d{2}$/.test(lines[j]) && !lines[j].startsWith('Fresa:') && !lines[j].startsWith('Sup.:')) {
-          parametros.push(lines[j]);
+        let bloco = [lines[i]];
+        let j = i+1;
+        // Agrupa linhas até próxima operação real
+        while (j < lines.length && !opNumeros.includes(lines[j])) {
+          bloco.push(lines[j]);
           j++;
         }
-        let ferramenta = '';
-        let suporte = '';
-        if (lines[j] && lines[j].startsWith('Fresa:')) { ferramenta = lines[j+1] || ''; j += 2; }
-        if (lines[j] && lines[j].startsWith('Sup.:')) { suporte = lines[j+1] || ''; j += 2; }
-        operacoes.push({ numero, tipo, observacao, parametros: parametros.join(' '), ferramenta: ferramenta.trim(), suporte: suporte.trim() });
+        // Extrair campos do bloco
+        let tipo = '', ref = '', comentario = '', ferramenta = '', suporte = '', camposTecnicos = '';
+        // 1. Tipo e função
+        tipo = bloco[1] || '';
+        ref = bloco[2] || '';
+        // 2. Comentário (pode ser multiline)
+        let comentarioIdx = 3;
+        comentario = '';
+        while (comentarioIdx < bloco.length && !/\d/.test(bloco[comentarioIdx]) && !bloco[comentarioIdx].toLowerCase().startsWith('fresa:') && !bloco[comentarioIdx].toLowerCase().startsWith('sup.:')) {
+          comentario += (bloco[comentarioIdx] + ' ');
+          comentarioIdx++;
+        }
+        comentario = comentario.trim();
+        // 3. Linha técnica: a que tem mais de 5 números separados por espaço
+        let camposIdx = comentarioIdx;
+        let maxNumeros = 0;
+        for (let k = comentarioIdx; k < bloco.length; k++) {
+          const n = (bloco[k].match(/-?\d{1,4}(?:[.,]\d+)?/g) || []).length;
+          if (n > maxNumeros) {
+            maxNumeros = n;
+            camposTecnicos = bloco[k];
+          }
+        }
+        // 4. Fresa e suporte (associar à operação)
+        for (let k = comentarioIdx; k < bloco.length; k++) {
+          if (bloco[k].toLowerCase().startsWith('fresa:')) {
+            ferramenta = bloco[k].replace(/fresa:/i, '').trim();
+          }
+          if (bloco[k].toLowerCase().startsWith('sup.:')) {
+            suporte = bloco[k].replace(/sup.:/i, '').trim();
+          }
+        }
+        // 5. Extrair campos técnicos usando regex (ajustar conforme padrão)
+        // Exemplo: "80 2 50 50 -145 -0,5 0 53 0,8 0,05 577 6058 3º"
+        let [diameter, rc, rib, alt, zMin, lat2d, lat, vert, passoLat, passoVert, tol, rot, av, angulo] = ['', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+        if (camposTecnicos) {
+          // Regex para capturar os campos separados por espaço, incluindo negativos e decimais
+          const campos = camposTecnicos.match(/-?\d{1,4}(?:[.,]\d+)?|[A-Za-zº]+/g) || [];
+          [diameter, rc, rib, alt, zMin, lat2d, lat, vert, passoLat, passoVert, tol, rot, av, angulo] = campos;
+        }
+        // Montar objeto operação
+        operacoes.push({
+          numero,
+          tipo,
+          ref,
+          comentario,
+          ferramenta,
+          suporte,
+          diameter,
+          rc,
+          rib,
+          alt,
+          zMin,
+          lat2d,
+          lat,
+          vert,
+          passoLat,
+          passoVert,
+          tol,
+          rot,
+          av,
+          angulo
+        });
         i = j;
-      } else { i++; }
+      } else {
+        i++;
+      }
     }
     return { projeto, operacoes, maquina };
   }
@@ -366,37 +431,59 @@ router.post('/import-pdf-project', upload.single('file'), async (req, res) => {
     const result = await db.collection('projects').insertOne(projectDoc);
     const projectDb = await db.collection('projects').findOne({ _id: result.insertedId });
     // Criar operações
+    // Log detalhado das operações extraídas do parser
+    console.log('[IMPORT PDF] Operações extraídas do parser:');
+    parsed.operacoes.forEach((op, idx) => {
+      console.log(`[OPERAÇÃO ${idx + 1}]`, JSON.stringify(op, null, 2));
+    });
     const operations = parsed.operacoes.map((op, idx) => {
       // Garantir que type seja apenas 'Furação' ou 'Fresamento'
       let type = '';
       if (/fura/i.test(op.tipo)) type = 'Furação';
       else if (/fres/i.test(op.tipo)) type = 'Fresamento';
+      else if (/rosca/i.test(op.tipo) || /macho/i.test(op.comentario || '')) type = 'Furação';
       else type = 'Furação'; // fallback
 
-      // function: usar observacao ou tipo original
-      let func = op.observacao || op.tipo || '';
+      // function: usar ref ou tipo original
+      let func = op.ref || op.tipo || '';
 
-      return {
+      // Preencher campos técnicos
+      const details = {
+        depth: op.zMin || '',
+        speed: op.rot || '',
+        feed: op.av || '',
+        coolant: '',
+        notes: op.comentario || ''
+      };
+
+      // Log detalhado do objeto que será salvo no banco
+      const opToSave = {
         projectId: projectDb._id,
         sequence: op.numero || String(idx + 1),
         type,
         function: func,
-        centerPoint: '', // não vem do PDF
+        centerPoint: op.lat2d || '',
         toolRef: op.ferramenta || '',
-        ic: '',
-        alt: '',
+        ic: op.rc || '',
+        alt: op.alt || '',
         time: { machine: '', total: '' },
-        details: { depth: '', speed: '', feed: '', coolant: '', notes: op.parametros || '' },
-        quality: { tolerance: '', surfaceFinish: '', requirements: [] },
+        details,
+        quality: { tolerance: op.tol || '', surfaceFinish: '', requirements: [] },
         imageUrl: '',
         completed: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
+      console.log(`[MAPPING OPERAÇÃO ${idx + 1}]`, JSON.stringify(opToSave, null, 2));
+      return opToSave;
     });
     if (operations.length > 0) {
       try {
-        await db.collection('operations').insertMany(operations);
+        const sanitizedOperations = operations.map(op => {
+          const { id, _id, ...rest } = op;
+          return rest;
+        });
+        await db.collection('operations').insertMany(sanitizedOperations);
       } catch (opErr) {
         console.error('[IMPORT PDF] Erro ao inserir operações:', opErr);
         return res.status(500).json({ error: 'Erro ao inserir operações', details: opErr && opErr.message ? opErr.message : opErr });
@@ -406,6 +493,191 @@ router.post('/import-pdf-project', upload.single('file'), async (req, res) => {
   } catch (err) {
     console.error('[IMPORT PDF] Erro geral ao criar projeto/operacoes:', err);
     res.status(500).json({ error: 'Erro ao criar projeto/operacoes', details: err && err.message ? err.message : err });
+  }
+});
+
+// Função auxiliar para extrair dados técnicos de uma string
+function extractTechnicalDetails(paramStr) {
+  const details = { depth: '', speed: '', feed: '', coolant: '', notes: paramStr || '' };
+  if (!paramStr) return details;
+  // Extrair profundidade (ex: 85mm)
+  const depthMatch = paramStr.match(/(\d{1,4}(?:[.,]\d+)?\s?mm)/i);
+  if (depthMatch) details.depth = depthMatch[1];
+  // Extrair rotação (ex: 2800 RPM)
+  const speedMatch = paramStr.match(/(\d{3,5}\s?RPM)/i);
+  if (speedMatch) details.speed = speedMatch[1];
+  // Extrair avanço (ex: 0.12mm/rev)
+  const feedMatch = paramStr.match(/(\d{1,2}[.,]\d{1,3}\s?mm\/rev)/i);
+  if (feedMatch) details.feed = feedMatch[1];
+  // Extrair coolant (ex: Externa 45 bar)
+  const coolantMatch = paramStr.match(/(Externa\s*\d{1,3}\s*bar|Interna\s*\d{1,3}\s*bar)/i);
+  if (coolantMatch) details.coolant = coolantMatch[1];
+  return details;
+}
+
+function adaptOperation(doc, projectId) {
+  return {
+    projectId: typeof projectId === 'string' ? new ObjectId(projectId) : projectId,
+    sequence: doc['Nº'] || '',
+    type: doc['Tipo de Operação'] && doc['Tipo de Operação'].includes('Fura') ? 'Furação' : 'Fresamento',
+    function: doc['Observação'] || '',
+    centerPoint: doc['Ø'] || '',
+    toolRef: doc['Ferramenta'] || '',
+    ic: doc['Passos'] || '',
+    alt: doc['Z Min'] || '',
+    time: {
+      machine: '', // ou preencha se houver no CSV
+      total: ''
+    },
+    details: {
+      depth: doc['Z Min'] || '',
+      speed: doc['Rotação'] || '',
+      feed: doc['Avanço'] || '',
+      coolant: doc['Suporte'] || '',
+      notes: doc['Observação'] || ''
+    },
+    quality: {
+      tolerance: doc['Tolerância'] || '',
+      surfaceFinish: '',
+      requirements: []
+    },
+    imageUrl: '',
+    completed: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    signedBy: '',
+    timestamp: new Date(),
+    inspectionNotes: '',
+    timeRecord: { start: new Date(0), end: new Date(0) },
+    measurementValue: ''
+  };
+}
+
+// POST /api/projects/import-csv
+router.post('/import-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo CSV enviado' });
+  const projectId = req.body.projectId || req.query.projectId;
+  console.log('[IMPORT CSV] projectId recebido:', projectId);
+  if (!projectId) return res.status(400).json({ error: 'projectId é obrigatório' });
+  const db = await connect();
+  let project;
+  try {
+    project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    console.log('[IMPORT CSV] Projeto encontrado:', project);
+  } catch (e) {
+    return res.status(400).json({ error: 'projectId inválido' });
+  }
+  if (!project) return res.status(404).json({ error: 'Projeto não encontrado' });
+  try {
+    // Ler o CSV
+    const csvData = fs.readFileSync(req.file.path, 'utf-8');
+    // Parse CSV localmente
+    fs.unlinkSync(req.file.path);
+    const records = parse(csvData, {
+      columns: true,
+      skip_empty_lines: true,
+      delimiter: ';',
+      trim: true
+    });
+    console.log('[IMPORT CSV] JSON convertido localmente:', JSON.stringify(records, null, 2));
+    if (!records || !Array.isArray(records) || records.length === 0) return res.status(500).json({ error: 'Erro ao converter CSV para JSON' });
+    // Mapeamento campo a campo para cada linha do CSV
+    const mappedRecords = records.map(row => adaptOperation(row, project._id));
+    await db.collection('operations').insertMany(mappedRecords, { ordered: false });
+    res.json({ success: true, count: records.length });
+  } catch (err) {
+    console.error('[IMPORT CSV] Erro:', err);
+    if (err && err.writeErrors && err.writeErrors.length > 0) {
+      err.writeErrors.forEach((e, i) => {
+        const failedDoc = e.err && e.err.op ? e.err.op : null;
+        if (failedDoc) {
+          console.error(`[IMPORT CSV] Documento que falhou na validação (#${i + 1}):`, JSON.stringify(failedDoc, null, 2));
+        }
+        console.error(`[IMPORT CSV] WriteError #${i}:`, JSON.stringify(e, null, 2));
+      });
+    }
+    res.status(500).json({ error: 'Erro ao importar CSV', details: err && err.message ? err.message : err });
+  }
+});
+
+function safeString(val) {
+  return typeof val === 'string' ? val : (val == null ? null : String(val));
+}
+function safeBool(val) {
+  if (typeof val === 'boolean') return val;
+  if (val === 'true' || val === '1') return true;
+  if (val === 'false' || val === '0') return false;
+  return null;
+}
+function safeDate(val) {
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+function safeArray(val) {
+  if (Array.isArray(val)) return val.map(String);
+  if (typeof val === 'string' && val.trim()) return [val];
+  return [];
+}
+
+function mapCsvToOperationLoose(row, projectId) {
+  // Mapeamento direto: só preenche se o valor do CSV existir e for do tipo esperado
+  const op = {};
+  op.projectId = typeof projectId === 'string' ? new ObjectId(projectId) : projectId;
+  if (typeof row['Nº'] === 'string') op.sequence = row['Nº'];
+  if (typeof row['Tipo de Operação'] === 'string') op.type = row['Tipo de Operação'];
+  if (typeof row['Observação'] === 'string') op.function = row['Observação'];
+  if (typeof row['Ø'] === 'string') op.centerPoint = row['Ø'];
+  if (typeof row['Ferramenta'] === 'string') op.toolRef = row['Ferramenta'];
+  if (typeof row['Passos'] === 'string') op.ic = row['Passos'];
+  if (typeof row['Z Min'] === 'string') op.alt = row['Z Min'];
+  // Campos compostos
+  op.time = { machine: '', total: '' };
+  op.details = {
+    depth: typeof row['Z Min'] === 'string' ? row['Z Min'] : '',
+    speed: typeof row['Rotação'] === 'string' ? row['Rotação'] : '',
+    feed: typeof row['Avanço'] === 'string' ? row['Avanço'] : '',
+    coolant: typeof row['Suporte'] === 'string' ? row['Suporte'] : '',
+    notes: typeof row['Observação'] === 'string' ? row['Observação'] : ''
+  };
+  op.quality = {
+    tolerance: typeof row['Tolerância'] === 'string' ? row['Tolerância'] : '',
+    surfaceFinish: '',
+    requirements: []
+  };
+  op.imageUrl = '';
+  op.completed = false;
+  op.createdAt = new Date();
+  op.updatedAt = new Date();
+  op.signedBy = '';
+  op.timestamp = null;
+  op.inspectionNotes = '';
+  op.timeRecord = { start: null, end: null };
+  op.measurementValue = '';
+  return op;
+}
+
+// Importação CSV simples: converte CSV para JSON e insere cada linha como documento na coleção 'operations'
+router.post('/import-csv-simple', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo CSV enviado' });
+  const projectId = req.body.projectId || req.query.projectId;
+  const db = await connect();
+  try {
+    const csvData = fs.readFileSync(req.file.path, 'utf-8');
+    fs.unlinkSync(req.file.path);
+    const records = parse(csvData, {
+      columns: true,
+      skip_empty_lines: true,
+      delimiter: ';',
+      trim: true
+    });
+    if (!records || !Array.isArray(records) || records.length === 0) return res.status(500).json({ error: 'Erro ao converter CSV para JSON' });
+    // Mapeamento campo a campo para cada linha do CSV
+    const mappedRecords = records.map(row => adaptOperation(row, projectId));
+    await db.collection('operations').insertMany(mappedRecords, { ordered: false });
+    res.json({ success: true, count: records.length });
+  } catch (err) {
+    console.error('[IMPORT CSV SIMPLE] Erro:', err);
+    res.status(500).json({ error: 'Erro ao importar CSV simples', details: err && err.message ? err.message : err });
   }
 });
 

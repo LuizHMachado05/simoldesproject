@@ -263,6 +263,34 @@ export function AdminPanel({ machineId }: AdminPanelProps): ReactElement {
   const [pdfJsonLoading, setPdfJsonLoading] = useState(false);
   const [pdfJsonError, setPdfJsonError] = useState('');
 
+  // Adicionar nova aba para importar CSV
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvImportResult, setCsvImportResult] = useState<string>('');
+
+  // Estado para projetos disponíveis
+  const [availableProjects, setAvailableProjects] = useState<{_id: string, name: string}[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+
+  // Estado para nova aba de importação simples
+  const [csvSimpleFile, setCsvSimpleFile] = useState<File | null>(null);
+  const [csvSimplePreview, setCsvSimplePreview] = useState<any[]>([]);
+  const [csvSimpleImportResult, setCsvSimpleImportResult] = useState<string>('');
+
+  // Estado para projetos disponíveis na aba simples
+  const [availableProjectsSimple, setAvailableProjectsSimple] = useState<{_id: string, name: string}[]>([]);
+  const [selectedProjectIdSimple, setSelectedProjectIdSimple] = useState<string>('');
+
+  // Buscar projetos ao abrir a aba de importação simples
+  useEffect(() => {
+    if (activeTab === 'importcsvsimple') {
+      fetch('/api/projects')
+        .then(res => res.json())
+        .then(data => {
+          setAvailableProjectsSimple(data.map((p: any) => ({ _id: p._id, name: p.name })));
+        });
+    }
+  }, [activeTab]);
+
   // Carregar dados
   useEffect(() => {
     loadData();
@@ -1046,6 +1074,75 @@ export function AdminPanel({ machineId }: AdminPanelProps): ReactElement {
     }
   };
 
+  const handleCsvUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvFile || !selectedProjectId) {
+      setCsvImportResult('Selecione um projeto e um arquivo CSV.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', csvFile);
+    formData.append('projectId', selectedProjectId);
+    try {
+      const res = await fetch('/api/projects/import-csv', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCsvImportResult('Importação realizada com sucesso!');
+      } else {
+        setCsvImportResult('Erro: ' + (data.error || 'Erro desconhecido.'));
+      }
+    } catch (err) {
+      setCsvImportResult('Erro ao importar CSV.');
+    }
+  };
+
+  // Handler para upload simples
+  const handleCsvSimpleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvSimpleFile || !selectedProjectIdSimple) return;
+    const formData = new FormData();
+    formData.append('file', csvSimpleFile);
+    formData.append('projectId', selectedProjectIdSimple);
+    try {
+      const res = await fetch('/api/projects/import-csv-simple', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      setCsvSimpleImportResult(data.success ? `Importação concluída: ${data.count} registros` : `Erro: ${data.error || data.details}`);
+    } catch (err) {
+      setCsvSimpleImportResult('Erro ao importar CSV simples');
+    }
+  };
+
+  // Preview do CSV simples
+  const handleCsvSimpleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setCsvSimpleFile(file);
+    setCsvSimpleImportResult('');
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const headers = lines[0]?.split(';');
+        const preview = lines.slice(1, 6).map(line => {
+          const values = line.split(';');
+          const obj: any = {};
+          headers?.forEach((h, i) => obj[h] = values[i]);
+          return obj;
+        });
+        setCsvSimplePreview(preview);
+      };
+      reader.readAsText(file);
+    } else {
+      setCsvSimplePreview([]);
+    }
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="container mx-auto px-4 py-6">
@@ -1124,6 +1221,28 @@ export function AdminPanel({ machineId }: AdminPanelProps): ReactElement {
               >
                 <FileText className="h-5 w-5 inline-block mr-2" />
                 Importar Projeto (PDF)
+              </button>
+              <button
+                onClick={() => setActiveTab('importcsv')}
+                className={`py-4 px-6 text-center border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'importcsv'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="h-5 w-5 inline-block mr-2" />
+                Importar CSV
+              </button>
+              <button
+                onClick={() => setActiveTab('importcsvsimple')}
+                className={`py-4 px-6 text-center border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'importcsvsimple'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="h-5 w-5 inline-block mr-2" />
+                Importação CSV Simples
               </button>
             </nav>
           </div>
@@ -1760,6 +1879,54 @@ export function AdminPanel({ machineId }: AdminPanelProps): ReactElement {
                     <b>Operações importadas:</b> {pdfJsonResult.operacoes?.length || 0}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Aba de Importar CSV */}
+            {activeTab === 'importcsv' && (
+              <div className="p-6">
+                <h2 className="text-xl font-bold mb-4">Importar Operações via CSV</h2>
+                <form onSubmit={handleCsvUpload} className="space-y-4">
+                  <div>
+                    <label className="block mb-1 font-medium">Projeto de destino:</label>
+                    <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} className="border rounded px-2 py-1">
+                      <option value="">Selecione um projeto</option>
+                      {availableProjects.map(p => (
+                        <option key={p._id} value={p._id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <input type="file" accept=".csv" onChange={e => setCsvFile(e.target.files?.[0] || null)} />
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Importar CSV</button>
+                </form>
+                {csvImportResult && <div className="mt-4">{csvImportResult}</div>}
+              </div>
+            )}
+
+            {/* Nova aba de importação CSV simples */}
+            {activeTab === 'importcsvsimple' && (
+              <div className="p-6">
+                <h2 className="text-xl font-bold mb-4">Importação CSV Simples</h2>
+                <form onSubmit={handleCsvSimpleUpload} className="space-y-4">
+                  <div>
+                    <label className="block mb-1 font-medium">Projeto de destino:</label>
+                    <select value={selectedProjectIdSimple} onChange={e => setSelectedProjectIdSimple(e.target.value)} className="border rounded px-2 py-1">
+                      <option value="">Selecione um projeto</option>
+                      {availableProjectsSimple.map(p => (
+                        <option key={p._id} value={p._id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <input type="file" accept=".csv" onChange={handleCsvSimpleFileChange} />
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Importar CSV Simples</button>
+                </form>
+                {csvSimplePreview.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-semibold mb-2">Preview dos primeiros registros:</h4>
+                    <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(csvSimplePreview, null, 2)}</pre>
+                  </div>
+                )}
+                {csvSimpleImportResult && <div className="mt-4">{csvSimpleImportResult}</div>}
               </div>
             )}
           </div>
