@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: '/simoldesproject/',  // Nome correto do repositório
+  base: '/',
   plugins: [react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
