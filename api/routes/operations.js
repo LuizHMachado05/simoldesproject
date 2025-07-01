@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { connect } = require('../db/mongodb');
 const { ObjectId } = require('mongodb');
+const multer = require('multer');
+const { parse } = require('csv-parse/sync');
 
 // GET /api/operations
 router.get('/', async (req, res) => {
@@ -301,29 +303,24 @@ router.post('/sign', async (req, res) => {
     const projectIdStr = project._id.toString();
     console.log('[DEBUG] Projeto encontrado:', project._id, 'ProjectId:', project.projectId);
     
-    // Buscar a operação usando sempre projectId como string OU ObjectId
+    // Buscar a operação usando sempre projectId como ObjectId
     let operationFilter;
-    const projectIdObj = new ObjectId(projectIdStr);
     if (typeof operationId === 'number') {
-      operationFilter = {
-        $or: [
-          { projectId: projectIdStr, id: operationId },
-          { projectId: projectIdObj, id: operationId }
-        ]
+      operationFilter = { 
+        projectId: project._id,
+        id: operationId 
       };
     } else {
-      operationFilter = {
-        $or: [
-          { projectId: projectIdStr, sequence: String(operationId) },
-          { projectId: projectIdObj, sequence: String(operationId) }
-        ]
+      operationFilter = { 
+        projectId: project._id,
+        sequence: String(operationId) 
       };
     }
     
     console.log('[DEBUG] Buscando operação com filtro:', operationFilter);
     
     // Buscar todas as operações do projeto
-    const allOperations = await db.collection('operations').find({ projectId: projectIdStr }).toArray();
+    const allOperations = await db.collection('operations').find({ projectId: project._id }).toArray();
     console.log('[DEBUG] Operações encontradas para o projeto:', allOperations.length);
     allOperations.forEach(op => {
       console.log('[DEBUG] Operação:', { id: op.id, sequence: op.sequence, _id: op._id, projectId: op.projectId });
@@ -342,7 +339,7 @@ router.post('/sign', async (req, res) => {
       }
       if (!operation) {
         operationFilter = { 
-          projectId: projectIdStr,
+          projectId: project._id,
           $or: [
             { id: operationId },
             { sequence: String(operationId) },
@@ -470,6 +467,146 @@ router.get('/with-operations/:id', async (req, res) => {
     res.json({ ...project, operations });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao buscar projeto com operações', details: error.message });
+  }
+});
+
+// Configurar multer para upload de arquivos
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+// POST /api/operations/import-csv
+router.post('/import-csv', upload.single('file'), async (req, res) => {
+  try {
+    console.log('--- [IMPORT CSV] Requisição recebida ---');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('File:', req.file ? req.file.originalname : 'Nenhum arquivo');
+
+    if (!req.file) {
+      console.log('Nenhum arquivo enviado');
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+    const { projectId } = req.body;
+    if (!projectId) {
+      console.log('projectId não enviado');
+      return res.status(400).json({ error: 'projectId é obrigatório' });
+    }
+    const db = await connect();
+    const project = await db.collection('projects').findOne({ projectId: projectId });
+    if (!project) {
+      console.log('Projeto não encontrado:', projectId);
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
+    // Parsear CSV
+    const csvString = req.file.buffer.toString('utf-8');
+    const records = parse(csvString, {
+      columns: true,
+      skip_empty_lines: true,
+      delimiter: ';',
+      trim: true
+    });
+    // Mapear cada linha para operação, incluindo todos os campos do CSV
+    const operations = records.map((row, idx) => {
+      const op = {
+        projectId: project._id,
+        id: idx + 1,
+        sequence: row['Nº'] || String(idx + 1).padStart(2, '0'),
+        type: row['Tipo de Operação'] || '',
+        notes: row['Observação'] || '',
+        diameter: row['Ø'] || '',
+        steps: row['Passos'] || '',
+        depth: row['Z Min'] || '',
+        tolerance: row['Tolerância'] || '',
+        rpm: row['Rotação'] || '',
+        feed: row['Avanço'] || '',
+        toolRef: row['Ferramenta'] || '',
+        support: row['Suporte'] || '',
+        completed: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      for (const key in row) {
+        if (!(key in op)) {
+          op[key] = row[key];
+        }
+      }
+      return op;
+    });
+    console.log(`[IMPORT CSV] ${operations.length} operações processadas para o projeto ${projectId}`);
+    res.json({ success: true, operations, message: `${operations.length} operações processadas do CSV` });
+  } catch (error) {
+    console.error('Erro ao importar CSV:', error);
+    res.status(500).json({ error: 'Erro ao processar arquivo CSV', details: error.message });
+  }
+});
+
+// POST /api/operations/bulk-create
+router.post('/bulk-create', async (req, res) => {
+  try {
+    const { projectId, operations } = req.body;
+    
+    if (!projectId || !operations || !Array.isArray(operations)) {
+      return res.status(400).json({ error: 'projectId e operations são obrigatórios' });
+    }
+
+    const db = await connect();
+    
+    // Verificar se o projeto existe
+    const project = await db.collection('projects').findOne({ projectId: projectId });
+    if (!project) {
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
+
+    // Preparar operações para inserção
+    const operationsToInsert = operations.map(op => ({
+      ...op,
+      projectId: project._id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }));
+
+    // Inserir operações em lote
+    const result = await db.collection('operations').insertMany(operationsToInsert);
+
+    console.log('[DEBUG] Operações inseridas:', result.insertedCount);
+
+    res.json({
+      success: true,
+      insertedCount: result.insertedCount,
+      message: `${result.insertedCount} operações criadas com sucesso`
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar operações em lote:', error);
+    res.status(500).json({ error: 'Erro ao criar operações', details: error.message });
+  }
+});
+
+// POST /api/operations/create
+router.post('/create', async (req, res) => {
+  try {
+    const { projectId, operation } = req.body;
+    if (!projectId || !operation) {
+      return res.status(400).json({ error: 'projectId e operation são obrigatórios' });
+    }
+    const db = await connect();
+    const project = await db.collection('projects').findOne({ projectId });
+    if (!project) {
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
+    // Preencher campos automáticos
+    const op = {
+      ...operation,
+      projectId: project._id,
+      id: Date.now(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completed: false,
+    };
+    await db.collection('operations').insertOne(op);
+    res.json({ success: true, operation: op });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao criar operação', details: error.message });
   }
 });
 

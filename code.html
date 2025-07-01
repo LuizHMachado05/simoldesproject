@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Folha de Processo Digital - Upload e Extração PDF</title>
+    <style>
+        :root {
+            --primary-color: #4e54c8;
+            --secondary-color: #8f94fb;
+            --background-color: #f0f3ff;
+            --accent-color: #ff6f61;
+            --text-color: #333333;
+            --border-radius: 8px;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            min-height: 100vh;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        header {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            width: 100%;
+            padding: 1.5rem;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+        main {
+            max-width: 900px;
+            width: 90%;
+            margin-top: 2rem;
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 20px rgba(78, 84, 200, 0.2);
+        }
+        h1 {
+            margin-bottom: 0.3rem;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: block;
+            font-size: 1.1rem;
+        }
+        input[type="file"] {
+            border: 2px dashed var(--primary-color);
+            padding: 1rem;
+            width: 100%;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+        input[type="file"]:focus,
+        input[type="file"]:hover {
+            border-color: var(--accent-color);
+            outline: none;
+        }
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            margin-top: 1.5rem;
+            transition: background 0.3s ease;
+            width: 100%;
+            max-width: 300px;
+            display: block;
+        }
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background: var(--accent-color);
+        }
+        pre {
+            background: #f4f6fc;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 1rem;
+        }
+        footer {
+            margin-top: auto;
+            padding: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+            text-align: center;
+        }
+        .success-message {
+            color: green;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+        .error-message {
+            color: red;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Folha de Processo Digital</h1>
+        <p>Importe seu PDF do PowerMill e converta para JSON</p>
+    </header>
+    <main>
+        <label for="pdfFile">Selecione o arquivo PDF do processo:</label>
+        <input type="file" accept="application/pdf" id="pdfFile" />
+
+        <button id="convertBtn" disabled>Converter e Visualizar JSON</button>
+        <button id="uploadBtn" disabled>Enviar JSON para Servidor</button>
+
+        <pre id="jsonOutput" aria-live="polite" aria-label="JSON extraído do PDF"></pre>
+        <div id="message" role="alert"></div>
+    </main>
+    <footer>
+        &copy; 2024 Sua Empresa de Usinagem de Moldes
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.9.179/pdf.min.js"></script>
+    <script>
+        const pdfFileInput = document.getElementById('pdfFile');
+        const convertBtn = document.getElementById('convertBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const jsonOutput = document.getElementById('jsonOutput');
+        const message = document.getElementById('message');
+
+        let pdfData = null;
+        let extractedJSON = null;
+
+        pdfFileInput.addEventListener('change', () => {
+            message.textContent = '';
+            jsonOutput.textContent = '';
+            extractedJSON = null;
+            if (pdfFileInput.files.length > 0) {
+                convertBtn.disabled = false;
+                uploadBtn.disabled = true;
+            } else {
+                convertBtn.disabled = true;
+                uploadBtn.disabled = true;
+            }
+        });
+
+        convertBtn.addEventListener('click', async () => {
+            if (!pdfFileInput.files.length) return;
+            const file = pdfFileInput.files[0];
+            const fileReader = new FileReader();
+
+            fileReader.onload = async function() {
+                const typedarray = new Uint8Array(this.result);
+                try {
+                    const pdf = await pdfjsLib.getDocument({data: typedarray}).promise;
+                    let fullText = '';
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + '\\n';
+                    }
+                    // Para demonstração simples, vamos converter o texto extraído para JSON simples:
+                    // Exemplo: chave/valor por linha (simples parsing)
+                    extractedJSON = parseTextToJSON(fullText);
+                    jsonOutput.textContent = JSON.stringify(extractedJSON, null, 2);
+                    uploadBtn.disabled = false;
+                    message.textContent = 'JSON extraído com sucesso. Você pode enviar para o servidor.';
+                    message.className = 'success-message';
+                } catch(e) {
+                    message.textContent = 'Erro ao processar o PDF: ' + e.message;
+                    message.className = 'error-message';
+                    uploadBtn.disabled = true;
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        uploadBtn.addEventListener('click', async () => {
+            if (!extractedJSON) return;
+            message.textContent = '';
+            message.className = '';
+            try {
+                // Exemplo de envio para servidor - substitua a URL abaixo pelo seu endpoint real
+                const response = await fetch('https://seuservidor.com/api/processos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(extractedJSON),
+                });
+                if (response.ok) {
+                    message.textContent = 'Dados enviados com sucesso!';
+                    message.className = 'success-message';
+                } else {
+                    const errText = await response.text();
+                    message.textContent = 'Falha ao enviar dados: ' + errText;
+                    message.className = 'error-message';
+                }
+            } catch(error) {
+                message.textContent = 'Erro na requisição: ' + error.message;
+                message.className = 'error-message';
+            }
+        });
+
+        function parseTextToJSON(text) {
+            // Função de parsing simples: linhas com "chave: valor"
+            const lines = text.split('\\n').map(line => line.trim()).filter(line => line.length > 0);
+            const obj = {};
+            lines.forEach(line => {
+                const sepIndex = line.indexOf(':');
+                if (sepIndex > 0) {
+                    const key = line.substring(0, sepIndex).trim();
+                    const value = line.substring(sepIndex + 1).trim();
+                    obj[key] = value;
+                }
+            });
+            // Caso não encontre nada, retorna o texto puro em array
+            if (Object.keys(obj).length === 0) {
+                return { rawText: text.trim() };
+            }
+            return obj;
+        }
+    </script>
+</body>
+</html>
+

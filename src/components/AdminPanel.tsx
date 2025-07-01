@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { 
   Users, 
@@ -19,7 +19,8 @@ import {
   ClipboardList,
   Calendar,
   Filter,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 import { getOperators, createOperator, updateOperator, deleteOperator, Operator } from '../services/operatorService';
 import { getMachines, createMachine, updateMachine, deleteMachine, Machine } from '../services/machineService';
@@ -28,6 +29,7 @@ import { getLogs, createLog, deleteLog, clearOldLogs, Log, LogFilters } from '..
 import { logActivity, logOperation, logError } from '../services/logService';
 import machinesData from '../data/machines.json';
 import { ProgramEditModal } from './ProgramEditModal';
+import { OperationImportModal } from './OperationImportModal';
 
 // Interface para projeto/programa
 interface MoldProgram {
@@ -79,7 +81,37 @@ interface Operation {
     start: string;
     end: string;
   };
+  completed?: boolean;
 }
+
+// Adicionar tipo CsvOperation para operações importadas do CSV
+interface CsvOperation {
+  [key: string]: any;
+}
+
+// Adicionar tipo para operação manual
+interface ManualOperation {
+  id: number;
+  type?: string;
+  toolRef?: string;
+  notes?: string;
+  [key: string]: any;
+}
+
+// Lista de campos do CSV
+const csvFields = [
+  'Nº',
+  'Tipo de Operação',
+  'Observação',
+  'Ø',
+  'Passos',
+  'Z Min',
+  'Tolerância',
+  'Rotação',
+  'Avanço',
+  'Ferramenta',
+  'Suporte',
+];
 
 // Funções de filtro com tipagem
 const filterOperators = (operators: Operator[], searchTerm: string): Operator[] => {
@@ -103,7 +135,65 @@ const filterPrograms = (programs: MoldProgram[], searchTerm: string): MoldProgra
   );
 };
 
-export function AdminPanel(): ReactElement {
+// Modal para cadastro de operação dinâmica (corrigido)
+function OperationModal({ isOpen, onClose, onSave, initialOperation }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (op: any) => void;
+  initialOperation?: any;
+}) {
+  // Inicializa o estado do formulário com todos os campos do CSV
+  const emptyOperation = csvFields.reduce((acc, field) => ({ ...acc, [field]: '' }), {});
+  const [operation, setOperation] = useState<any>(initialOperation || emptyOperation);
+
+  // Atualiza apenas o campo alterado
+  const handleChange = (field: string, value: string) => {
+    setOperation((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  // Quando abrir o modal, reseta o formulário se for para adicionar
+  React.useEffect(() => {
+    if (isOpen && !initialOperation) {
+      setOperation(emptyOperation);
+    }
+    if (isOpen && initialOperation) {
+      setOperation(initialOperation);
+    }
+    // eslint-disable-next-line
+  }, [isOpen, initialOperation]);
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-semibold mb-4">Adicionar Operação</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {csvFields.map(field => (
+            <div key={field} className="flex flex-col">
+              <label className="text-xs text-gray-600 mb-1">{field}</label>
+              <input
+                className="border rounded px-2 py-1"
+                placeholder={field}
+                value={operation[field] || ''}
+                onChange={e => handleChange(field, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button className="px-4 py-2 bg-gray-200 rounded" onClick={onClose}>Cancelar</button>
+          <button className="px-4 py-2 bg-green-600 text-white rounded" onClick={() => onSave(operation)}>Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface AdminPanelProps {
+  machineId?: string;
+}
+
+export function AdminPanel({ machineId }: AdminPanelProps): ReactElement {
   const [activeTab, setActiveTab] = useState('users');
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -158,6 +248,20 @@ export function AdminPanel(): ReactElement {
   });
 
   const [showDetailedEditModal, setShowDetailedEditModal] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState<string | null>(null);
+
+  // Estado para operação em edição
+  const [newOperation, setNewOperation] = useState<ManualOperation>({ id: 1 });
+  const [editingOperation, setEditingOperation] = useState<ManualOperation | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+
+  // Estado do modal
+  const [showOperationModal, setShowOperationModal] = useState<string | null>(null);
+
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfJsonResult, setPdfJsonResult] = useState<any>(null);
+  const [pdfJsonLoading, setPdfJsonLoading] = useState(false);
+  const [pdfJsonError, setPdfJsonError] = useState('');
 
   // Carregar dados
   useEffect(() => {
@@ -179,12 +283,8 @@ export function AdminPanel(): ReactElement {
       
       // Carregar projetos da API
       const projectsData = await getProjectsWithOperations();
-      const programsData = projectsData.map(project => ({
-        ...project,
-        operations: []
-      }));
-      setPrograms(programsData);
-      setFilteredPrograms(programsData);
+      setPrograms(projectsData);
+      setFilteredPrograms(projectsData);
       
       // Carregar logs da API
       const logsData = await getLogs();
@@ -245,12 +345,8 @@ export function AdminPanel(): ReactElement {
         case 'programs':
           // Recarregar projetos da API
           const projectsData = await getProjectsWithOperations();
-          const programsData = projectsData.map(project => ({
-            ...project,
-            operations: []
-          }));
-          setPrograms(programsData);
-          setFilteredPrograms(programsData);
+          setPrograms(projectsData);
+          setFilteredPrograms(projectsData);
           break;
         
         case 'logs':
@@ -269,6 +365,7 @@ export function AdminPanel(): ReactElement {
       setEditedMachineData({});
       setEditedProgramData({});
       setShowDetailedEditModal(null);
+      setShowImportModal(null);
 
       // Log de atualização bem-sucedida
       await logOperation('Admin', 'Sistema', `Dados da aba ${activeTab} atualizados com sucesso`);
@@ -668,6 +765,142 @@ export function AdminPanel(): ReactElement {
     }
   };
 
+  // Funções para gerenciar operações
+  const handleAddOperation = (projectId: string) => {
+    // TODO: Implementar modal para adicionar operação
+    console.log('Adicionar operação ao projeto:', projectId);
+  };
+
+  const handleEditOperation = (projectId: string, operation: Operation) => {
+    // TODO: Implementar modal para editar operação
+    console.log('Editar operação:', operation, 'do projeto:', projectId);
+  };
+
+  const handleDeleteOperation = async (projectId: string, operationId: number | string) => {
+    if (confirm('Tem certeza que deseja excluir esta operação?')) {
+      try {
+        // TODO: Implementar chamada para API para deletar operação
+        console.log('Deletar operação:', operationId, 'do projeto:', projectId);
+        await refreshPrograms();
+      } catch (error) {
+        console.error('Erro ao deletar operação:', error);
+      }
+    }
+  };
+
+  // Função para importar operações do CSV
+  const handleImportOperations = async (operations: CsvOperation[]) => {
+    try {
+      const projectId = showImportModal;
+      if (!projectId) return;
+
+      const response = await fetch('/api/operations/bulk-create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          operations
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao importar operações');
+      }
+
+      const result = await response.json();
+      console.log('Operações importadas:', result);
+      
+      // Recarregar projetos para mostrar as novas operações
+      await refreshPrograms();
+      
+      alert(`${result.insertedCount} operações importadas com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao importar operações:', error);
+      alert('Erro ao importar operações: ' + error);
+    }
+  };
+
+  // Função para adicionar operação manualmente
+  const handleAddManualOperation = async (projectId: string) => {
+    if (!newOperation.type && !newOperation.toolRef && !newOperation.notes) {
+      alert('Preencha pelo menos um campo para adicionar a operação.');
+      return;
+    }
+    try {
+      const op = {
+        ...newOperation,
+        id: Date.now(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completed: false,
+      };
+      const response = await fetch('/api/operations/bulk-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, operations: [op] }),
+      });
+      if (!response.ok) throw new Error('Erro ao adicionar operação');
+      setNewOperation({ id: Date.now() });
+      await refreshPrograms();
+    } catch (error) {
+      alert('Erro ao adicionar operação: ' + error);
+    }
+  };
+
+  // Função para editar operação
+  const handleEditManualOperation = (projectId: string, operation: ManualOperation) => {
+    setEditingOperation(operation);
+    setEditingProjectId(projectId);
+  };
+
+  // Função para salvar edição
+  const handleSaveEditOperation = async () => {
+    if (!editingOperation || !editingProjectId) return;
+    try {
+      const op = {
+        ...editingOperation,
+        updatedAt: new Date(),
+      };
+      // Atualizar operação (simples: deletar e adicionar de novo)
+      await handleDeleteOperation(editingProjectId, editingOperation.id);
+      const response = await fetch('/api/operations/bulk-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: editingProjectId, operations: [op] }),
+      });
+      if (!response.ok) throw new Error('Erro ao salvar edição');
+      setEditingOperation(null);
+      setEditingProjectId(null);
+      await refreshPrograms();
+    } catch (error) {
+      alert('Erro ao salvar edição: ' + error);
+    }
+  };
+
+  // Função para cancelar edição
+  const handleCancelEditOperation = () => {
+    setEditingOperation(null);
+    setEditingProjectId(null);
+  };
+
+  // Função para salvar operação
+  const handleSaveOperation = async (projectId: string, op: any) => {
+    try {
+      const response = await fetch('/api/operations/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, operation: op }),
+      });
+      if (!response.ok) throw new Error('Erro ao criar operação');
+      setShowOperationModal(null);
+      await refreshPrograms();
+    } catch (error) {
+      alert('Erro ao criar operação: ' + error);
+    }
+  };
+
   const renderProgramsTab = () => {
     return (
       <div className="space-y-4">
@@ -712,6 +945,61 @@ export function AdminPanel(): ReactElement {
                     <div className="mt-3 p-3 bg-gray-50 rounded-md">
                       <span className="font-medium text-gray-700">Observações:</span>
                       <p className="text-gray-600 mt-1">{program.observations}</p>
+                    </div>
+                  )}
+
+                  {program.operations && program.operations.length > 0 && (
+                    <div className="mt-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-lg font-medium text-gray-900">Operações</h4>
+                        <button className="px-3 py-1 bg-green-600 text-white rounded" onClick={() => setShowOperationModal(program.projectId)}>Adicionar Operação</button>
+                      </div>
+                      {/* Modal de operação */}
+                      {showOperationModal === program.projectId && (
+                        <OperationModal
+                          isOpen={true}
+                          onClose={() => setShowOperationModal(null)}
+                          onSave={op => handleSaveOperation(program.projectId, op)}
+                        />
+                      )}
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full bg-gray-50 border border-gray-200 rounded-lg">
+                          <thead>
+                            <tr>
+                              {csvFields.map(field => (
+                                <th key={field} className="px-3 py-2 border-b text-left text-sm font-medium">{field}</th>
+                              ))}
+                              <th className="px-3 py-2 border-b text-left text-sm font-medium">Status</th>
+                              <th className="px-3 py-2 border-b text-left text-sm font-medium">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {program.operations.map((op, idx) => (
+                              <tr key={(op.sequence || idx) + '-' + idx} className="border-b hover:bg-gray-100">
+                                {csvFields.map(field => (
+                                  <td key={field} className="px-3 py-2 text-sm">{(op as any)[field] || ''}</td>
+                                ))}
+                                <td className="px-3 py-2 text-sm">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${op.completed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{op.completed ? 'Concluída' : 'Pendente'}</span>
+                                </td>
+                                <td className="px-3 py-2 text-sm flex gap-1">
+                                  <button className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs" onClick={() => setShowOperationModal(program.projectId + '-' + (op.id || idx))}>Editar</button>
+                                  <button className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs" onClick={() => handleDeleteOperation(program.projectId, op.id)}>Excluir</button>
+                                </td>
+                                {/* Modal de edição para cada operação */}
+                                {showOperationModal === program.projectId + '-' + (op.id || idx) && (
+                                  <OperationModal
+                                    isOpen={true}
+                                    onClose={() => setShowOperationModal(null)}
+                                    onSave={updatedOp => handleSaveOperation(program.projectId, { ...op, ...updatedOp })}
+                                    initialOperation={op}
+                                  />
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -825,6 +1113,17 @@ export function AdminPanel(): ReactElement {
               >
                 <Settings className="h-5 w-5 inline-block mr-2" />
                 Configurações
+              </button>
+              <button
+                onClick={() => setActiveTab('importpdf')}
+                className={`py-4 px-6 text-center border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'importpdf'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <FileText className="h-5 w-5 inline-block mr-2" />
+                Importar Projeto (PDF)
               </button>
             </nav>
           </div>
@@ -1380,344 +1679,102 @@ export function AdminPanel(): ReactElement {
                     </button>
                   </div>
                 </div>
-
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Banco de Dados</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status da Conexão
-                      </label>
-                      <div className="flex items-center">
-                        <span className="inline-block h-3 w-3 rounded-full bg-green-500 mr-2"></span>
-                        <span className="text-sm text-gray-700">Conectado</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome da Empresa
-                      </label>
-                      <input
-                        type="text"
-                        defaultValue="Simoldes Group"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Diretório de Programas
-                      </label>
-                      <input
-                        type="text"
-                        defaultValue="U:/"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Intervalo de Backup (horas)
-                      </label>
-                      <input
-                        type="number"
-                        defaultValue={24}
-                        min={1}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      />
-                    </div>
-                    <div className="flex items-center">
-                      <input
-                        id="auto-logout"
-                        type="checkbox"
-                        defaultChecked
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                      />
-                      <label htmlFor="auto-logout" className="ml-2 block text-sm text-gray-900">
-                        Logout automático após 30 minutos de inatividade
-                      </label>
-                    </div>
-                  </div>
-                  <div className="mt-6">
-                    <button className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
-                      Salvar Configurações
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 
-            {showDetailedEditModal && editedProgramData && (
-              <ProgramEditModal
-                program={editedProgramData as MoldProgram}
-                onClose={() => setShowDetailedEditModal(null)}
-                onSave={handleSaveDetailedEdit}
-              />
-            )}
-
-            {/* Modal para adicionar operador */}
-            {showAddModal === 'operator' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Operador</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome Completo *
-                      </label>
-                      <input
-                        type="text"
-                        value={newOperator.name}
-                        onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: João Silva"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Código *
-                      </label>
-                      <input
-                        type="text"
-                        value={newOperator.code}
-                        onChange={(e) => setNewOperator({ ...newOperator, code: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: OP12345"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cargo *
-                      </label>
-                      <select
-                        value={newOperator.role || ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setNewOperator({ 
-                            ...newOperator, 
-                            role: value ? (value as 'operator' | 'admin' | 'supervisor') : undefined 
-                          });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="">Selecione um cargo</option>
-                        <option value="operator">Operador</option>
-                        <option value="supervisor">Supervisor</option>
-                        <option value="admin">Administrador</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Ativo
-                      </label>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={newOperator.active}
-                          onChange={(e) => setNewOperator({ ...newOperator, active: e.target.checked })}
-                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">
-                          {newOperator.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </div>
-                    </div>
+            {activeTab === 'importpdf' && (
+              <div className="max-w-xl mx-auto bg-white p-6 rounded-lg shadow space-y-4">
+                <h2 className="text-xl font-bold mb-2">Importar Projeto via PDF</h2>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setPdfJsonLoading(true);
+                    setPdfJsonError('');
+                    setPdfJsonResult(null);
+                    const formData = new FormData();
+                    if (!pdfFile) {
+                      setPdfJsonError('Selecione um arquivo PDF.');
+                      setPdfJsonLoading(false);
+                      return;
+                    }
+                    formData.append('file', pdfFile);
+                    // Enviar a máquina logada, se disponível
+                    if (typeof machineId === 'string' && machineId) {
+                      formData.append('machine', machineId);
+                    }
+                    try {
+                      const res = await fetch('/api/projects/import-pdf-project', {
+                        method: 'POST',
+                        body: formData
+                      });
+                      if (!res.ok) {
+                        let errorMsg = await res.text();
+                        try { errorMsg = JSON.parse(errorMsg).error || errorMsg; } catch {}
+                        setPdfJsonError('Erro ao importar PDF: ' + errorMsg);
+                        // Logar erro no backend
+                        await fetch('/api/logs', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            type: 'Erro',
+                            user: 'Admin',
+                            machine: 'Painel',
+                            details: 'Erro ao importar PDF: ' + errorMsg,
+                            timestamp: new Date().toISOString()
+                          })
+                        });
+                        setPdfJsonLoading(false);
+                        return;
+                      }
+                      const json = await res.json();
+                      setPdfJsonResult(json);
+                      // Atualizar lista de projetos após importação
+                      await handleRefresh();
+                    } catch (err) {
+                      setPdfJsonError('Erro ao importar PDF: ' + err);
+                    } finally {
+                      setPdfJsonLoading(false);
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={e => setPdfFile(e.target.files?.[0] || null)}
+                    className="block w-full border rounded p-2"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark"
+                    disabled={pdfJsonLoading}
+                  >
+                    {pdfJsonLoading ? 'Importando...' : 'Importar PDF'}
+                  </button>
+                </form>
+                {pdfJsonError && <div className="text-red-600">{pdfJsonError}</div>}
+                {pdfJsonResult && (
+                  <div className="bg-green-100 text-green-800 p-3 rounded">
+                    Projeto importado com sucesso!<br/>
+                    <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto max-h-60">{JSON.stringify(pdfJsonResult.projeto, null, 2)}</pre>
+                    <b>Operações importadas:</b> {pdfJsonResult.operacoes?.length || 0}
                   </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddOperator}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal para adicionar máquina */}
-            {showAddModal === 'machine' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Nova Máquina</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Código da Máquina *
-                      </label>
-                      <input
-                        type="text"
-                        value={newMachine.machineId}
-                        onChange={(e) => setNewMachine({ ...newMachine, machineId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: F1400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome da Máquina *
-                      </label>
-                      <input
-                        type="text"
-                        value={newMachine.name}
-                        onChange={(e) => setNewMachine({ ...newMachine, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: Fresadora CNC 1400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status
-                      </label>
-                      <select
-                        value={newMachine.status}
-                        onChange={(e) => setNewMachine({ ...newMachine, status: e.target.value as 'active' | 'maintenance' | 'inactive' })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="active">Ativo</option>
-                        <option value="inactive">Inativo</option>
-                        <option value="maintenance">Em Manutenção</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Senha *
-                      </label>
-                      <input
-                        type="password"
-                        value={newMachine.password}
-                        onChange={(e) => setNewMachine({ ...newMachine, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Senha da máquina"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddMachine}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal para adicionar programa */}
-            {showAddModal === 'program' && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Adicionar Novo Projeto</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ID do Projeto *
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.projectId}
-                        onChange={(e) => setNewProgram({ ...newProgram, projectId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: 1670_20"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nome do Projeto *
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.name}
-                        onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: MOLDE LATERAL ESQUERDO"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Máquina *
-                      </label>
-                      <select
-                        value={newProgram.machine}
-                        onChange={(e) => setNewProgram({ ...newProgram, machine: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                      >
-                        <option value="">Selecione uma máquina</option>
-                        {machines.map((machine) => (
-                          <option key={machine.machineId} value={machine.machineId}>
-                            {machine.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Material
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.material}
-                        onChange={(e) => setNewProgram({ ...newProgram, material: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: 1730"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Programador
-                      </label>
-                      <input
-                        type="text"
-                        value={newProgram.programmer}
-                        onChange={(e) => setNewProgram({ ...newProgram, programmer: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="Ex: nome.sobrenome"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Observações
-                      </label>
-                      <textarea
-                        value={newProgram.observations}
-                        onChange={(e) => setNewProgram({ ...newProgram, observations: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                        rows={3}
-                        placeholder="Observações importantes sobre o projeto"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      onClick={() => setShowAddModal(null)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleAddProgram}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal de importação */}
+      {showImportModal && (
+        <OperationImportModal
+          isOpen={!!showImportModal}
+          onClose={() => setShowImportModal(null)}
+          onImport={handleImportOperations}
+          projectId={showImportModal}
+        />
+      )}
     </div>
   );
 }
