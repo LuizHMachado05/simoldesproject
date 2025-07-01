@@ -1,9 +1,0 @@
-{
-  "projectId": "2001_A",
-  "operationId": 1,
-  "operatorName": "Teste Operador",
-  "startTime": "08:00",
-  "endTime": "10:30",
-  "measurement": "12.5",
-  "notes": "Teste de atualização via API"
-} 
