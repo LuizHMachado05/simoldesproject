@@ -235,7 +235,12 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                     type="text"
                     value={operatorQuery}
                     onChange={handleOperatorInputChange}
-                    onFocus={handleInputFocus}
+                    onFocus={(e) => {
+                      handleInputFocus();
+                      e.target.style.borderColor = '#04514B';
+                      e.target.style.backgroundColor = 'white';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
+                    }}
                     onMouseDown={handleInputClick}
                     style={{
                       width: '100%',
@@ -248,11 +253,6 @@ export function SignOperationModal({ isOpen, onClose, onConfirm }: SignOperation
                     }}
                     placeholder="Clique para ver todos os operadores ou digite para filtrar"
                     autoComplete="off"
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#04514B';
-                      e.target.style.backgroundColor = 'white';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(4, 81, 75, 0.1)';
-                    }}
                     onBlur={(e) => {
                       e.target.style.borderColor = '#e5e7eb';
                       e.target.style.backgroundColor = '#f9fafb';
