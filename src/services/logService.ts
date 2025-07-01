@@ -21,6 +21,8 @@ export interface LogFilters {
   limit?: number;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function getLogs(filters?: LogFilters): Promise<Log[]> {
   const params = new URLSearchParams();
   
@@ -32,7 +34,7 @@ export async function getLogs(filters?: LogFilters): Promise<Log[]> {
     });
   }
   
-  const url = `http://localhost:3001/api/logs${params.toString() ? `?${params.toString()}` : ''}`;
+  const url = `${API_BASE_URL}/api/logs${params.toString() ? `?${params.toString()}` : ''}`;
   const res = await fetch(url);
   
   if (!res.ok) {
@@ -55,7 +57,7 @@ export async function searchLogs(query: string): Promise<Log[]> {
 
 export async function createLog(log: Omit<Log, '_id' | 'timestamp' | 'createdAt' | 'updatedAt'>): Promise<Log> {
   console.log('Enviando log para API:', log);
-  const res = await fetch('http://localhost:3001/api/logs', {
+  const res = await fetch(`${API_BASE_URL}/api/logs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(log),
@@ -72,7 +74,7 @@ export async function createLog(log: Omit<Log, '_id' | 'timestamp' | 'createdAt'
 }
 
 export async function updateLog(id: string, log: Partial<Log>): Promise<void> {
-  await fetch(`http://localhost:3001/api/logs/${id}`, {
+  await fetch(`${API_BASE_URL}/api/logs/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(log),
@@ -80,13 +82,13 @@ export async function updateLog(id: string, log: Partial<Log>): Promise<void> {
 }
 
 export async function deleteLog(id: string): Promise<void> {
-  await fetch(`http://localhost:3001/api/logs/${id}`, {
+  await fetch(`${API_BASE_URL}/api/logs/${id}`, {
     method: 'DELETE',
   });
 }
 
 export async function clearOldLogs(days: number = 30): Promise<{ deletedCount: number }> {
-  const res = await fetch(`http://localhost:3001/api/logs?days=${days}`, {
+  const res = await fetch(`${API_BASE_URL}/api/logs?days=${days}`, {
     method: 'DELETE',
   });
   

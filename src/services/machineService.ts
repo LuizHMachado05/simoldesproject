@@ -9,8 +9,10 @@ export interface Machine {
   updatedAt?: Date;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function getMachines(): Promise<Machine[]> {
-  const res = await fetch('http://localhost:3001/api/machines');
+  const res = await fetch(`${API_BASE_URL}/api/machines`);
   return await res.json();
 }
 
@@ -25,7 +27,7 @@ export async function searchMachines(query: string): Promise<Machine[]> {
 
 export async function createMachine(machine: Omit<Machine, '_id'>): Promise<Machine> {
   console.log('Enviando dados da máquina para API:', machine);
-  const res = await fetch('http://localhost:3001/api/machines', {
+  const res = await fetch(`${API_BASE_URL}/api/machines`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(machine),
@@ -40,7 +42,7 @@ export async function createMachine(machine: Omit<Machine, '_id'>): Promise<Mach
 }
 
 export async function updateMachine(id: string, machine: Partial<Machine>): Promise<void> {
-  await fetch(`http://localhost:3001/api/machines/${id}`, {
+  await fetch(`${API_BASE_URL}/api/machines/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(machine),
@@ -48,7 +50,7 @@ export async function updateMachine(id: string, machine: Partial<Machine>): Prom
 }
 
 export async function deleteMachine(id: string): Promise<void> {
-  await fetch(`http://localhost:3001/api/machines/${id}`, {
+  await fetch(`${API_BASE_URL}/api/machines/${id}`, {
     method: 'DELETE',
   });
 } 

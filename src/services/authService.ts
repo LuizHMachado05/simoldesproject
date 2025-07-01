@@ -17,11 +17,13 @@ export interface AuthResponse {
   machine?: Omit<Machine, 'password'>;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function authenticateMachine(machineId: string, password: string): Promise<Machine | null> {
   try {
     console.log('Tentando autenticar máquina:', machineId);
     
-    const response = await fetch('http://localhost:3001/api/auth/login', {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,7 +48,7 @@ export async function authenticateMachine(machineId: string, password: string): 
 
 export async function verifyMachine(machineId: string): Promise<Machine | null> {
   try {
-    const response = await fetch(`http://localhost:3001/api/auth/verify?machineId=${machineId}`);
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify?machineId=${machineId}`);
     const data: AuthResponse = await response.json();
 
     if (response.ok && data.success && data.machine) {

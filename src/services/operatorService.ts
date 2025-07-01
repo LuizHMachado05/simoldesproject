@@ -17,8 +17,10 @@ export interface OperatorAuthResponse {
   error?: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function getOperators(): Promise<Operator[]> {
-  const res = await fetch('http://localhost:3001/api/operators');
+  const res = await fetch(`${API_BASE_URL}/api/operators`);
   return await res.json();
 }
 
@@ -33,7 +35,7 @@ export async function searchOperators(query: string): Promise<Operator[]> {
 
 export async function createOperator(operator: Omit<Operator, '_id'>): Promise<Operator> {
   console.log('Enviando dados para API:', operator);
-  const res = await fetch('http://localhost:3001/api/operators', {
+  const res = await fetch(`${API_BASE_URL}/api/operators`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(operator),
@@ -48,7 +50,7 @@ export async function createOperator(operator: Omit<Operator, '_id'>): Promise<O
 }
 
 export async function updateOperator(id: string, operator: Partial<Operator>): Promise<void> {
-  await fetch(`http://localhost:3001/api/operators/${id}`, {
+  await fetch(`${API_BASE_URL}/api/operators/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(operator),
@@ -56,7 +58,7 @@ export async function updateOperator(id: string, operator: Partial<Operator>): P
 }
 
 export async function deleteOperator(id: string): Promise<void> {
-  await fetch(`http://localhost:3001/api/operators/${id}`, {
+  await fetch(`${API_BASE_URL}/api/operators/${id}`, {
     method: 'DELETE',
   });
 }
@@ -65,7 +67,7 @@ export async function authenticateOperator(code: string, password: string): Prom
   try {
     console.log('Tentando autenticar operador:', { code, password: '***' });
     
-    const response = await fetch('http://localhost:3001/api/auth/operator-login', {
+    const response = await fetch(`${API_BASE_URL}/api/auth/operator-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operatorId: code, password })

@@ -18,13 +18,15 @@ export interface Project {
   updatedAt?: Date;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function getProjects(): Promise<Project[]> {
-  const res = await fetch('http://localhost:3001/api/projects');
+  const res = await fetch(`${API_BASE_URL}/api/projects`);
   return await res.json();
 }
 
 export async function getProjectsWithOperations(machine?: string): Promise<Project[]> {
-  let url = 'http://localhost:3001/api/projects/with-operations';
+  let url = `${API_BASE_URL}/api/projects/with-operations`;
   if (machine) {
     url += `?machine=${encodeURIComponent(machine)}`;
   }
@@ -43,7 +45,7 @@ export async function searchProjects(query: string): Promise<Project[]> {
 
 export async function createProject(project: Omit<Project, '_id'>): Promise<Project> {
   console.log('Enviando dados do projeto para API:', project);
-  const res = await fetch('http://localhost:3001/api/projects', {
+  const res = await fetch(`${API_BASE_URL}/api/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(project),
@@ -58,7 +60,7 @@ export async function createProject(project: Omit<Project, '_id'>): Promise<Proj
 }
 
 export async function updateProject(id: string, project: Partial<Project>): Promise<void> {
-  const res = await fetch(`http://localhost:3001/api/projects/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(project),
@@ -71,7 +73,7 @@ export async function updateProject(id: string, project: Partial<Project>): Prom
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const res = await fetch(`http://localhost:3001/api/projects/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
     method: 'DELETE',
   });
   
@@ -82,13 +84,13 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function getProjectWithOperationsById(projectId: string): Promise<Project> {
-  const res = await fetch(`http://localhost:3001/api/projects/with-operations/${projectId}`);
+  const res = await fetch(`${API_BASE_URL}/api/projects/with-operations/${projectId}`);
   return await res.json();
 }
 
 export async function finishProject(projectId: string): Promise<{ success: boolean; message: string; completedDate: Date }> {
   try {
-    const response = await fetch('http://localhost:3001/api/projects/finish', {
+    const response = await fetch(`${API_BASE_URL}/api/projects/finish`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
